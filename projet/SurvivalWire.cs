@@ -37,16 +37,23 @@ public static class SurvivalWire
 
     private static bool _fleeing;
     private static bool _fleeSuppressed;
+    private static bool _repairPaused;
+    private static bool _pauseSuppressed;
+    private static float _pauseStartedAt;
     private static float _fleeStartedAt;
     private static float _nextRepairAt;
 
     public static bool IsFleeing { get { return _fleeing && !Plugin.HaltInsteadOfFlee; } }
+    // Mode « réparer puis reprendre » : activité arrêtée jusqu'aux PV pleins.
+    public static bool IsRepairPaused { get { return _repairPaused; } }
     public static bool IsHalting { get { return _fleeing && Plugin.HaltInsteadOfFlee; } }
 
     public static void Reset()
     {
         _fleeing = false;
         _fleeSuppressed = false;
+        _repairPaused = false;
+        _pauseSuppressed = false;
         _nextRepairAt = 0f;
     }
 
@@ -69,13 +76,17 @@ public static class SurvivalWire
         {
             // Mort ou information non fiable : la fuite ne peut pas continuer sur cette base.
             if (joueur != null && (joueur.Vie <= 0 || joueur.VieMax <= 0))
+            {
                 _fleeing = false;
+                _repairPaused = false;
+            }
             ended = wasFleeing && !_fleeing;
             return _fleeing;
         }
 
         float percent = joueur.PourcentageVie;
         UpdateFlee(percent);
+        UpdateRepairPause(joueur, percent);
         TryRepair(player, joueur, percent);
 
         started = !wasFleeing && _fleeing;
@@ -124,6 +135,52 @@ public static class SurvivalWire
         }
     }
 
+    /*
+     * Mode « réparer puis reprendre » (Plugin.RepairPausesActivity) : dès que les PV
+     * passent sous le seuil de réparation, toute activité est mise en pause (navire
+     * immobile, géré par CopperWire) tandis que la réparation travaille ; l'activité
+     * ne reprend qu'aux PV pleins. La fuite reste prioritaire si elle est active.
+     */
+    private static void UpdateRepairPause(FicheJoueur joueur, float percent)
+    {
+        if (!Plugin.RepairPausesActivity || !Plugin.RepairEnabled)
+        {
+            if (_repairPaused)
+                Plugin.Logger.LogInfo("[SurvivalWire] Fin de pause de réparation : option désactivée.");
+            _repairPaused = false;
+            _pauseSuppressed = false;
+            return;
+        }
+
+        if (!_repairPaused)
+        {
+            if (percent > Plugin.RepairPercent)
+                _pauseSuppressed = false;
+
+            if (!_pauseSuppressed && percent <= Plugin.RepairPercent && joueur.Vie < joueur.VieMax)
+            {
+                _repairPaused = true;
+                _pauseStartedAt = Time.time;
+                Plugin.Logger.LogInfo(
+                    "[SurvivalWire] Pause de réparation à " + percent.ToString("F0") + " % (seuil "
+                    + Plugin.RepairPercent + " %).");
+            }
+            return;
+        }
+
+        if (joueur.Vie >= joueur.VieMax)
+        {
+            _repairPaused = false;
+            Plugin.Logger.LogInfo("[SurvivalWire] Fin de pause de réparation : PV pleins.");
+        }
+        else if (Time.time - _pauseStartedAt >= FleeMaxSeconds)
+        {
+            _pauseSuppressed = true;
+            _repairPaused = false;
+            Plugin.Logger.LogInfo("[SurvivalWire] Fin de pause de réparation : délai maximal atteint.");
+        }
+    }
+
     private static void EndFlee(string reason)
     {
         _fleeing = false;
@@ -143,7 +200,7 @@ public static class SurvivalWire
             || Time.time < _nextRepairAt)
             return;
 
-        if (percent > Plugin.RepairPercent && !_fleeing)
+        if (percent > Plugin.RepairPercent && !_fleeing && !_repairPaused)
             return;
 
         _nextRepairAt = Time.time + RepairRetrySeconds;

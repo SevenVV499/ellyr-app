@@ -32,6 +32,7 @@ namespace EtatJoueurMod
         private static ConfigEntry<int> _fleePercent;
         private static ConfigEntry<bool> _fleeCollectEnabled;
         private static ConfigEntry<bool> _haltInsteadOfFlee;
+        private static ConfigEntry<bool> _repairPausesActivity;
         private static readonly Dictionary<string, ConfigEntry<bool>> CollectibleTypeSettings =
             new Dictionary<string, ConfigEntry<bool>>(StringComparer.Ordinal);
         private static Il2CppSystem.Action _targetCatalogDisconnectHandler;
@@ -113,6 +114,16 @@ namespace EtatJoueurMod
             get { return _fleeCollectEnabled != null && _fleeCollectEnabled.Value; }
         }
 
+        public static bool RepairPausesActivity
+        {
+            get { return _repairPausesActivity != null && _repairPausesActivity.Value; }
+        }
+
+        public static void SetRepairPausesActivity(bool enabled)
+        {
+            SetSetting(_repairPausesActivity, enabled);
+        }
+
         public static bool HaltInsteadOfFlee
         {
             get { return _haltInsteadOfFlee != null && _haltInsteadOfFlee.Value; }
@@ -167,6 +178,8 @@ namespace EtatJoueurMod
                 "While HP <= FleePercent, abandon Combat (and Collect unless FleeCollectEnabled) and navigate until HP recovers.");
             _fleeCollectEnabled = _config.Bind("Survival", "FleeCollectEnabled", false,
                 "Allow collecting (never combat) while fleeing.");
+            _repairPausesActivity = _config.Bind("Survival", "RepairPausesActivity", false,
+                "At RepairPercent, stop all activity (ship stays still) and repair; resume at full HP.");
             _haltInsteadOfFlee = _config.Bind("Survival", "HaltInsteadOfFlee", false,
                 "At FleePercent, stop all activity and stay still (repair only) instead of fleeing.");
             _fleePercent = _config.Bind("Survival", "FleePercent", 60,

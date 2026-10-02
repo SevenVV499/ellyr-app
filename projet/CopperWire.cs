@@ -370,12 +370,21 @@ public static class CopperWire
         bool fleeStarted;
         bool fleeEnded;
         bool fleeing = SurvivalWire.Tick(player, snapshot, out fleeStarted, out fleeEnded);
-        if (fleeing && Plugin.HaltInsteadOfFlee)
+        // Arrêt total (navire immobile) : mode Halt de la fuite, ou pause de
+        // réparation quand la fuite n'est pas active. Seule la réparation travaille.
+        bool halt = fleeing ? Plugin.HaltInsteadOfFlee : SurvivalWire.IsRepairPaused;
+        if (halt)
         {
-            // Arrêt d'activité : aucune action, le navire reste sur place.
-            // Seule la réparation (SurvivalWire) travaille.
+            _wasHalted = true;
             HaltAllActivity(player, snapshot);
             return;
+        }
+
+        if (_wasHalted)
+        {
+            _wasHalted = false;
+            _lastMoveCell = null;
+            _nextDecisionAt = 0f;
         }
 
         _haltStopIssued = false;
@@ -532,6 +541,7 @@ public static class CopperWire
     }
 
     private static bool _haltStopIssued;
+    private static bool _wasHalted;
 
     private static void HaltAllActivity(Player player, EtatJeuSnapshot snapshot)
     {

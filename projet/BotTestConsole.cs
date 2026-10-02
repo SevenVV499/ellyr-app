@@ -197,6 +197,11 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         if (repairPercent != Plugin.RepairPercent)
             Plugin.SetRepairPercent(repairPercent);
 
+        bool pause = GUILayout.Toggle(
+            Plugin.RepairPausesActivity, "Repair pauses all activity until HP is full");
+        if (pause != Plugin.RepairPausesActivity)
+            Plugin.SetRepairPausesActivity(pause);
+
         bool flee = GUILayout.Toggle(Plugin.FleeEnabled, "Low-HP response (abandons current activity)");
         if (flee != Plugin.FleeEnabled)
             Plugin.SetFleeEnabled(flee);
@@ -221,6 +226,8 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
         if (SurvivalWire.IsFleeing)
             GUILayout.Label("State: FLEEING");
+        else if (SurvivalWire.IsRepairPaused)
+            GUILayout.Label("State: PAUSED (repairing)");
         else if (SurvivalWire.IsHalting)
             GUILayout.Label("State: HALTED (repairing)");
     }
