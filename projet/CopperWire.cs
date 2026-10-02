@@ -1121,8 +1121,7 @@ public static class CopperWire
             {
                 try
                 {
-                    manager.isaretliGemi = target;
-                    manager.Saldir();
+                    StartAttack(manager, player, target);
                     _lastAttackCallAt = Time.time;
                     _ownedCombatTarget = target;
                     _ownsCombat = true;
@@ -1208,6 +1207,38 @@ public static class CopperWire
         }
     }
 
+    // Démarrage de l'attaque. GameManager.Saldir() valide la cible puis passe
+    // Player.saldiridurumu à true (écriture locale, aucune commande réseau) ; le jeu
+    // envoie ensuite lui-même chaque tir (GulleYarat / ZipkinYarat).
+    // Constaté dans les journaux : fenêtre non active, Saldir() n'engage jamais
+    // l'attaque. Repli, uniquement hors focus : cible fixée directement et
+    // Player.Saldir(true), c'est-à-dire exactement l'écriture que fait Saldir().
+    private static void StartAttack(GameManager manager, Player player, GameObject target)
+    {
+        manager.isaretliGemi = target;
+        manager.Saldir();
+        if (player.saldiridurumu && manager.hedefgemi == target)
+            return;
+
+        if (Application.isFocused)
+            return;
+
+        BackgroundLog("Saldir() n'a pas engagé l'attaque (hedefgemi==cible : "
+            + (manager.hedefgemi == target) + ", saldiridurumu : " + player.saldiridurumu
+            + ") : repli Player.Saldir(true).");
+        try
+        {
+            manager.hedefgemi = target;
+            player.Saldir(true);
+            BackgroundLog("Après repli : hedefgemi==cible : " + (manager.hedefgemi == target)
+                + " | saldiridurumu : " + player.saldiridurumu);
+        }
+        catch (Exception e)
+        {
+            Plugin.Logger.LogError("[CopperWire] Repli d'attaque hors focus échoué : " + e);
+        }
+    }
+
     private static bool EnsureCombatTarget(Player player, GameObject target)
     {
         GameManager manager = GameManager.gm;
@@ -1220,8 +1251,7 @@ public static class CopperWire
 
         try
         {
-            manager.isaretliGemi = target;
-            manager.Saldir();
+            StartAttack(manager, player, target);
             _lastAttackCallAt = Time.time;
             _ownedCombatTarget = target;
             _ownsCombat = true;
