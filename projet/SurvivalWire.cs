@@ -7,8 +7,9 @@ using UnityEngine;
  *
  * - Réparation : parallèle à l'activité. Ne touche jamais au Brain ; elle envoie
  *   seulement Player.tamirOlBaslat() tant que les PV sont sous le seuil.
- * - Fuite : prioritaire. Quand elle démarre, CopperWire abandonne l'action
- *   Navigation / Collect / Combat et se déplace à l'opposé de la menace.
+ * - Fuite : prioritaire. Quand elle démarre, CopperWire abandonne Collect / Combat
+ *   et n'autorise que la Navigation (déplacements aléatoires habituels) jusqu'à
+ *   la sortie de fuite.
  *
  * Les deux seuils sont indépendants (Plugin.RepairPercent / Plugin.FleePercent).
  *
@@ -30,18 +31,10 @@ public static class SurvivalWire
     // PV qui ne remontent pas) est abandonnée après ce délai.
     private const float FleeMaxSeconds = 180f;
 
-    // Rayon dans lequel une entité visible est considérée comme menace
-    // quand aucune cible de combat n'est connue.
-    private const float FallbackThreatRadius = 80f;
-
     private static bool _fleeing;
     private static bool _fleeSuppressed;
     private static float _fleeStartedAt;
     private static float _nextRepairAt;
-
-    private static bool _hasThreat;
-    private static int _threatMap;
-    private static Vector2 _threatPosition;
 
     public static bool IsFleeing { get { return _fleeing; } }
 
@@ -50,60 +43,6 @@ public static class SurvivalWire
         _fleeing = false;
         _fleeSuppressed = false;
         _nextRepairAt = 0f;
-        _hasThreat = false;
-    }
-
-    public static void NoteThreat(int mapId, float x, float y)
-    {
-        if (float.IsNaN(x) || float.IsInfinity(x) || float.IsNaN(y) || float.IsInfinity(y))
-            return;
-
-        _hasThreat = true;
-        _threatMap = mapId;
-        _threatPosition = new Vector2(x, y);
-    }
-
-    public static void NoteThreatFromSnapshot(EtatJeuSnapshot snapshot)
-    {
-        if (snapshot == null || snapshot.Joueur == null)
-            return;
-
-        int mapId = snapshot.Joueur.Harita;
-        float bestDistance = FallbackThreatRadius;
-        bool found = false;
-        float bestX = 0f;
-        float bestY = 0f;
-
-        for (int i = 0; i < snapshot.Pnjs.Count; i++)
-        {
-            PnjInfo pnj = snapshot.Pnjs[i];
-            if (pnj == null || pnj.Harita != mapId || pnj.Distance >= bestDistance)
-                continue;
-            bestDistance = pnj.Distance;
-            bestX = pnj.X;
-            bestY = pnj.Y;
-            found = true;
-        }
-
-        for (int i = 0; i < snapshot.Navires.Count; i++)
-        {
-            NavireInfo navire = snapshot.Navires[i];
-            if (navire == null || navire.Distance >= bestDistance)
-                continue;
-            bestDistance = navire.Distance;
-            bestX = navire.X;
-            bestY = navire.Y;
-            found = true;
-        }
-
-        if (found)
-            NoteThreat(mapId, bestX, bestY);
-    }
-
-    public static bool TryGetThreat(int mapId, out Vector2 position)
-    {
-        position = _threatPosition;
-        return _hasThreat && _threatMap == mapId;
     }
 
     /*

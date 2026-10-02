@@ -195,7 +195,7 @@ public sealed class BluePencil
         _allowCollectible = allowCollectible;
     }
 
-    public BehaviorActionType Decide(EtatJeuSnapshot snapshot)
+    public BehaviorActionType Decide(EtatJeuSnapshot snapshot, bool navigationOnly = false)
     {
         if (snapshot == null || snapshot.Joueur == null)
             return BehaviorActionType.None;
@@ -208,6 +208,19 @@ public sealed class BluePencil
         SynchroniserCarte(snapshot);
         PurgeSkippedCollectiblesNoLongerVisible(snapshot);
         PurgeExcludedMonsterTargets(snapshot);
+
+        // Fuite : seule la Navigation est autorisée, aucun cycle Collect / Combat
+        // ne peut démarrer ni se poursuivre.
+        if (navigationOnly)
+        {
+            BehaviorAction current = _brain.CurrentAction;
+            if (current != null && !current.IsFinished
+                && current.Type != BehaviorActionType.Navigation)
+                _brain.CancelCurrent();
+            DemarrerNavigation();
+            return _brain.CurrentActionType;
+        }
+
         BehaviorAction active = _brain.CurrentAction;
         if (active != null && !active.IsFinished)
         {

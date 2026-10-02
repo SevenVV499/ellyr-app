@@ -142,7 +142,7 @@ namespace EtatJoueurMod
             _repairPercent = _config.Bind("Survival", "RepairPercent", 30,
                 new ConfigDescription("Repair trigger threshold, in percent of max HP.", percentRange));
             _fleeEnabled = _config.Bind("Survival", "FleeEnabled", false,
-                "Abandon the current activity and flee away from the threat while HP <= FleePercent.");
+                "While HP <= FleePercent, abandon Collect/Combat and only navigate until HP recovers.");
             _fleePercent = _config.Bind("Survival", "FleePercent", 60,
                 new ConfigDescription("Flee trigger threshold, in percent of max HP.", percentRange));
         }

@@ -245,7 +245,6 @@ public static class CopperWire
         Planner.CancelCurrent();
         RespawnWire.Reset();
         SurvivalWire.Reset();
-        _nextFleeOrderAt = 0f;
     }
 
     public static void SetLongRange(bool enabled)
@@ -340,7 +339,6 @@ public static class CopperWire
         if (etaitActif || RespawnWire.IsActive || Brain.IsRespawning)
         {
             SurvivalWire.Reset();
-            _nextFleeOrderAt = 0f;
             if (_executedAction != null)
             {
                 CleanupAction(_executedAction, player);
@@ -369,23 +367,18 @@ public static class CopperWire
         _actionMapId = snapshot.Joueur.Harita;
         _hasActionMap = true;
 
-        NoteSurvivalThreat(snapshot);
         bool fleeStarted;
         bool fleeEnded;
-        if (SurvivalWire.Tick(player, snapshot, out fleeStarted, out fleeEnded))
+        bool fleeing = SurvivalWire.Tick(player, snapshot, out fleeStarted, out fleeEnded);
+        if (fleeing)
         {
-            // La fuite est prioritaire : l'activité courante est abandonnée,
-            // la réparation (déjà traitée par SurvivalWire) reste parallèle.
-            if (fleeStarted || _executedAction != null || Brain.HasCurrentAction)
-                AbandonActionForFlee(player);
-            ExecuteFlee(player, snapshot);
-            return;
+            // La fuite est prioritaire : Collect / Combat sont abandonnés et
+            // interdits, seule la Navigation continue. La réparation (traitée par
+            // SurvivalWire) reste parallèle.
+            AbandonActionForFlee(player);
         }
-
-        if (fleeEnded)
+        else if (fleeEnded)
         {
-            _lastMoveCell = null;
-            _nextFleeOrderAt = 0f;
             _nextDecisionAt = 0f;
         }
 
@@ -421,7 +414,7 @@ public static class CopperWire
         }
         else
         {
-            selected = Planner.Decide(snapshot);
+            selected = Planner.Decide(snapshot, fleeing);
             action = Brain.CurrentAction;
         }
 
@@ -528,118 +521,21 @@ public static class CopperWire
         }
     }
 
-    // ----- Fuite (décidée par SurvivalWire, exécutée ici : déplacements natifs) -----
-
-    private const float FleeStepDistance = 40f;
-    private const float FleeMinStep = 8f;
-    private const float FleeMapMargin = 1f;
-    private const float FleeOrderIntervalSeconds = 1.5f;
-    private static readonly float[] FleeAnglesDegrees =
-        { 0f, 30f, -30f, 60f, -60f, 90f, -90f, 135f, -135f };
-    private static float _nextFleeOrderAt;
-
-    // Mémorise la menace : cible de combat en cours (position réelle si résolue),
-    // sinon l'entité visible la plus proche.
-    private static void NoteSurvivalThreat(EtatJeuSnapshot snapshot)
-    {
-        CombatTarget target = Brain.GetCurrentContext<CombatActionContext>()?.Target;
-        if (target == null)
-        {
-            SurvivalWire.NoteThreatFromSnapshot(snapshot);
-            return;
-        }
-
-        float x = target.X;
-        float y = target.Y;
-        try
-        {
-            GameObject live = ResolveCombatTarget(target);
-            if (live != null)
-            {
-                Vector3 position = live.transform.position;
-                x = position.x;
-                y = position.y;
-            }
-        }
-        catch (Exception)
-        {
-        }
-        SurvivalWire.NoteThreat(snapshot.Joueur.Harita, x, y);
-    }
-
+    // Fuite : l'activité Collect / Combat est abandonnée ; la Navigation en cours
+    // (ou une nouvelle) continue normalement, sans déplacement spécifique.
     private static void AbandonActionForFlee(Player player)
     {
+        BehaviorAction current = Brain.CurrentAction;
+        if (current != null && current.Type == BehaviorActionType.Navigation
+            && current == _executedAction)
+            return;
+
         if (_executedAction != null)
         {
             CleanupAction(_executedAction, player);
             _executedAction = null;
         }
         Planner.CancelCurrent();
-        _lastMoveCell = null;
-        _nextFleeOrderAt = 0f;
-    }
-
-    private static void ExecuteFlee(Player player, EtatJeuSnapshot snapshot)
-    {
-        if (Time.time < _nextFleeOrderAt)
-            return;
-
-        int mapId = snapshot.Joueur.Harita;
-        Vector3 current = player.transform.position;
-        Vector2 position = new Vector2(current.x, current.y);
-
-        Vector2 threat;
-        bool hasThreat = SurvivalWire.TryGetThreat(mapId, out threat);
-        Vector2 away = hasThreat ? position - threat : Vector2.zero;
-        if (away.sqrMagnitude < 0.01f)
-        {
-            hasThreat = false;
-            away = UnityEngine.Random.insideUnitCircle;
-            if (away.sqrMagnitude < 0.01f)
-                away = Vector2.right;
-        }
-        away.Normalize();
-
-        float minX, maxX, minY, maxY;
-        bool hasLimits = GameState.ObtenirLimitesCarte(mapId, out minX, out maxX, out minY, out maxY)
-            && maxX > minX && maxY > minY;
-
-        bool found = false;
-        Vector2 best = position;
-        float bestScore = float.NegativeInfinity;
-        for (int i = 0; i < FleeAnglesDegrees.Length; i++)
-        {
-            float radians = FleeAnglesDegrees[i] * Mathf.Deg2Rad;
-            float cos = Mathf.Cos(radians);
-            float sin = Mathf.Sin(radians);
-            Vector2 direction = new Vector2(
-                away.x * cos - away.y * sin,
-                away.x * sin + away.y * cos);
-            Vector2 destination = position + direction * FleeStepDistance;
-            if (hasLimits)
-            {
-                destination.x = Mathf.Clamp(destination.x, minX + FleeMapMargin, maxX - FleeMapMargin);
-                destination.y = Mathf.Clamp(destination.y, minY + FleeMapMargin, maxY - FleeMapMargin);
-            }
-
-            float moved = Vector2.Distance(position, destination);
-            if (moved < FleeMinStep)
-                continue;
-
-            float score = hasThreat ? Vector2.Distance(threat, destination) : moved;
-            if (score > bestScore)
-            {
-                bestScore = score;
-                best = destination;
-                found = true;
-            }
-        }
-
-        if (!found)
-            return;
-
-        if (IssueMove(player, mapId, best.x, best.y))
-            _nextFleeOrderAt = Time.time + FleeOrderIntervalSeconds;
     }
 
     private static ExecutionResult ExecuteNavigation(Player player, int mapId)
