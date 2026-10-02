@@ -292,6 +292,10 @@ namespace EtatJoueurMod
         private static float _dernierTickDecision;
         private const float IntervalleDecision = 0.5f;
 
+        // Écart minimal entre deux instantanés quand des dégâts en demandent un
+        // immédiat : évite de reconstruire l'instantané à chaque coup reçu.
+        private const float IntervalleUrgent = 0.1f;
+
         public static void Postfix(Player __instance)
         {
             try
@@ -305,9 +309,12 @@ namespace EtatJoueurMod
 
                 GameState.Tick(__instance);
 
-                if (Time.time - _dernierTickDecision >= IntervalleDecision)
+                float ecoule = Time.time - _dernierTickDecision;
+                if (ecoule >= IntervalleDecision
+                    || (ecoule >= IntervalleUrgent && GameState.InstantaneUrgentDemande))
                 {
                     _dernierTickDecision = Time.time;
+                    GameState.EffacerInstantaneUrgent();
                     if (GameState.JoueurLocal != null)
                     {
                         GameState.PreparerEtEnvoyerInstantane();
@@ -331,6 +338,9 @@ namespace EtatJoueurMod
                 if (__instance == null || !__instance.isLocalPlayer) return;
                 if (oldvalue <= 0 || newvalue <= 0)
                     Plugin.Logger.LogInfo($"[EtatJoueur] Vie changée : {oldvalue} -> {newvalue}");
+
+                if (newvalue > 0 && newvalue < oldvalue)
+                    GameState.SignalerDegats(newvalue, __instance.MaksCan);
             }
             catch (Exception e)
             {

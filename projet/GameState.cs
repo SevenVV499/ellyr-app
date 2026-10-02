@@ -301,6 +301,42 @@ namespace EtatJoueurMod
             get { return Interlocked.Read(ref _revisionSignauxCollecte); }
         }
 
+        // Incrémentée à chaque instantané publié : le bot décide dès qu'un instantané
+        // frais est disponible, au lieu d'attendre un minuteur indépendant.
+        private static long _revisionInstantane;
+
+        public static long RevisionInstantane
+        {
+            get { return Interlocked.Read(ref _revisionInstantane); }
+        }
+
+        // Demande d'instantané immédiat après des dégâts (voir SignalerDegats).
+        private static int _instantaneUrgent;
+
+        public static bool InstantaneUrgentDemande
+        {
+            get { return Volatile.Read(ref _instantaneUrgent) != 0; }
+        }
+
+        public static void EffacerInstantaneUrgent()
+        {
+            Volatile.Write(ref _instantaneUrgent, 0);
+        }
+
+        // Appelé quand les PV du joueur local baissent. Un instantané immédiat n'est
+        // demandé que si les nouveaux PV sont sous un seuil de réparation ou de fuite
+        // actif, pour que la survie réagisse sans attendre le prochain instantané.
+        public static void SignalerDegats(int vie, int vieMax)
+        {
+            if (!CopperWire.AutomationEnabled || vieMax <= 0)
+                return;
+
+            float pourcentage = 100f * vie / vieMax;
+            if ((Plugin.FleeEnabled && pourcentage <= Plugin.FleePercent)
+                || (Plugin.RepairEnabled && pourcentage <= Plugin.RepairPercent))
+                Volatile.Write(ref _instantaneUrgent, 1);
+        }
+
         public static void EnfilerEvenementRecompense(RewardEvent evenement)
         {
             if (evenement == null) return;
@@ -849,6 +885,7 @@ namespace EtatJoueurMod
                     new List<CollectibleCallbackEvent>(_historiqueCallbacksCollectibles),
                     tampon.Timestamp);
                 Interlocked.Exchange(ref _snapshotPublie, snapshot);
+                Interlocked.Increment(ref _revisionInstantane);
             }
             catch (Exception e)
             {

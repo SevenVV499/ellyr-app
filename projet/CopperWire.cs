@@ -8,7 +8,10 @@ using UnityEngine;
 
 public static class CopperWire
 {
-    private const float DecisionIntervalSeconds = 0.5f;
+    // Filet de sécurité seulement : la décision est normalement déclenchée par chaque
+    // nouvel instantané (voir OnPlayerUpdate), ce délai ne sert que si aucun instantané
+    // n'est publié.
+    private const float DecisionIntervalSeconds = 1.0f;
     private const float NavigationStuckSeconds = 10f;
 
     
@@ -96,6 +99,7 @@ public static class CopperWire
     private static bool _collectArrived;
     private static bool _automationEnabled;
     private static long _lastCollectSignalRevision;
+    private static long _lastSnapshotRevision;
     private static bool _hasAmmoSelectionAttempt;
     private static Guid _ammoSelectionActionId;
     private static TargetCategory _ammoSelectionCategory;
@@ -260,6 +264,8 @@ public static class CopperWire
 
         long collectSignalRevision = GameState.RevisionSignauxCollecte;
         bool newCollectSignal = collectSignalRevision != _lastCollectSignalRevision;
+        long snapshotRevision = GameState.RevisionInstantane;
+        bool newSnapshot = snapshotRevision != _lastSnapshotRevision;
         if (_automationEnabled)
         {
             ReactToNpcCannonShot(instance);
@@ -271,10 +277,11 @@ public static class CopperWire
             ClearNpcFollowTracking();
 
         if (_tickInProgress
-            || !newCollectSignal && Time.time < _nextDecisionAt)
+            || !newCollectSignal && !newSnapshot && Time.time < _nextDecisionAt)
             return;
 
         _lastCollectSignalRevision = collectSignalRevision;
+        _lastSnapshotRevision = snapshotRevision;
         _nextDecisionAt = Time.time + DecisionIntervalSeconds;
         _tickInProgress = true;
         try
