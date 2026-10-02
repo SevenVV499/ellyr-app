@@ -284,10 +284,67 @@ public static class CopperWire
             allowCollectible);
     }
 
+    // ----- Diagnostic arrière-plan (fenêtre non active / réduite) -----
+    // Journalise, seulement hors focus, ce qui permet de comprendre pourquoi la
+    // collecte et le combat ne s'exécutent pas : cadence réelle de Update, âge du
+    // snapshot, décisions du planificateur et résultats des exécuteurs.
+
+    private const float BackgroundHeartbeatSeconds = 5f;
+    private static float _bgNextHeartbeatAt;
+    private static float _bgLastHeartbeatReal;
+    private static int _bgLastHeartbeatFrame;
+    private static bool _bgWasFocused = true;
+
+    private static void BackgroundHeartbeat(Player player)
+    {
+        bool focused = Application.isFocused;
+        float real = Time.realtimeSinceStartup;
+        if (focused != _bgWasFocused)
+        {
+            _bgWasFocused = focused;
+            _bgNextHeartbeatAt = 0f;
+            Plugin.Logger.LogInfo("[Fond] Fenêtre " + (focused ? "active" : "NON active")
+                + " | automatisation=" + _automationEnabled
+                + " | targetFrameRate=" + Application.targetFrameRate
+                + " | runInBackground=" + Application.runInBackground
+                + " | timeScale=" + Time.timeScale);
+        }
+
+        if (focused || real < _bgNextHeartbeatAt)
+            return;
+
+        float elapsed = real - _bgLastHeartbeatReal;
+        int frames = Time.frameCount - _bgLastHeartbeatFrame;
+        _bgLastHeartbeatReal = real;
+        _bgLastHeartbeatFrame = Time.frameCount;
+        _bgNextHeartbeatAt = real + BackgroundHeartbeatSeconds;
+
+        EtatJeuSnapshot snapshot = GameState.ObtenirSnapshot();
+        string age = snapshot == null || snapshot.Timestamp == default(DateTime)
+            ? "aucun"
+            : (DateTime.UtcNow - snapshot.Timestamp).TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture) + " s";
+        BehaviorAction action = Brain.CurrentAction;
+        Plugin.Logger.LogInfo("[Fond] images/s=" + (elapsed > 0f ? (frames / elapsed).ToString("0.0", CultureInfo.InvariantCulture) : "?")
+            + " | dt=" + Time.deltaTime.ToString("0.000", CultureInfo.InvariantCulture)
+            + " | âge snapshot=" + age
+            + " | action=" + (action == null ? "aucune" : action.Type + "/" + action.State)
+            + " | saldiridurumu=" + player.saldiridurumu
+            + " | collectibles=" + (snapshot == null || snapshot.Collectibles == null ? 0 : snapshot.Collectibles.Count)
+            + " | PNJ=" + (snapshot == null || snapshot.Pnjs == null ? 0 : snapshot.Pnjs.Count));
+    }
+
+    private static void BackgroundLog(string message)
+    {
+        if (!Application.isFocused)
+            Plugin.Logger.LogInfo("[Fond] " + message);
+    }
+
     internal static void OnPlayerUpdate(Player instance)
     {
         if (instance == null || !instance.isLocalPlayer)
             return;
+
+        BackgroundHeartbeat(instance);
 
         long collectSignalRevision = GameState.RevisionSignauxCollecte;
         bool newCollectSignal = collectSignalRevision != _lastCollectSignalRevision;
@@ -438,6 +495,7 @@ public static class CopperWire
 
         if (action != _executedAction)
         {
+            BackgroundLog("Décision : " + (action == null ? "aucune" : action.Type.ToString()));
             CleanupAction(_executedAction, player);
             _executedAction = null;
             if (action == null)
@@ -467,6 +525,11 @@ public static class CopperWire
 
         if (result == ExecutionResult.Running)
             return;
+
+        BackgroundLog("Action " + selected + " terminée avec le résultat " + result
+            + " | saldiridurumu=" + player.saldiridurumu
+            + " | aiLerp.reachedDestination=" + (player.aiLerp != null && player.aiLerp.reachedDestination)
+            + " | pathPending=" + (player.aiLerp != null && player.aiLerp.pathPending));
 
         if (result == ExecutionResult.Completed)
             Planner.CompleteCurrent();
