@@ -5,8 +5,38 @@ using EtatJoueurMod;
 using Il2CppInterop.Runtime.Attributes;
 using UnityEngine;
 
+/*
+ * Console de test (provisoire) : thème sombre, onglets, cartes par thème.
+ * F8 : afficher / masquer. L'en-tête se déplace à la souris.
+ */
 public sealed class BotTestConsoleBehaviour : MonoBehaviour
 {
+    private const int TabControl = 0;
+    private const int TabSurvival = 1;
+    private const int TabTargets = 2;
+    private const int TabCollect = 3;
+    private const int TabStatus = 4;
+    private static readonly string[] TabLabels =
+        { "Control", "Survival", "Targets", "Collect", "Status" };
+
+    private const float HeaderHeight = 44f;
+    private const float TabBarHeight = 34f;
+    private const float FooterHeight = 22f;
+
+    // Palette
+    private static readonly Color ColBg = new Color(0.078f, 0.086f, 0.106f, 0.97f);
+    private static readonly Color ColHeader = new Color(0.106f, 0.118f, 0.145f, 1f);
+    private static readonly Color ColCard = new Color(0.125f, 0.137f, 0.165f, 1f);
+    private static readonly Color ColField = new Color(0.176f, 0.192f, 0.227f, 1f);
+    private static readonly Color ColFieldHover = new Color(0.22f, 0.24f, 0.285f, 1f);
+    private static readonly Color ColAccent = new Color(0.24f, 0.65f, 0.96f, 1f);
+    private static readonly Color ColAccentDim = new Color(0.14f, 0.30f, 0.45f, 1f);
+    private static readonly Color ColOk = new Color(0.24f, 0.86f, 0.59f, 1f);
+    private static readonly Color ColWarn = new Color(0.96f, 0.65f, 0.14f, 1f);
+    private static readonly Color ColDanger = new Color(0.95f, 0.37f, 0.36f, 1f);
+    private static readonly Color ColText = new Color(0.90f, 0.91f, 0.94f, 1f);
+    private static readonly Color ColMuted = new Color(0.54f, 0.58f, 0.65f, 1f);
+
     private readonly HashSet<string> _selectedNpcs =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _selectedMonsters =
@@ -21,12 +51,11 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private List<string> _displayNpcs = new List<string>();
     private List<string> _displayMonsters = new List<string>();
 
-    private Rect _panel = new Rect(16f, 16f, 680f, 680f);
-    private Rect _npcPanel = new Rect(0f, 16f, 400f, 410f);
-    private bool _npcPanelPlaced;
-    private bool _npcDebugVisible = true;
+    private Rect _panel = new Rect(16f, 16f, 620f, 680f);
     private Vector2 _scrollPosition;
     private bool _visible = true;
+    private bool _dragging;
+    private Vector2 _dragOffset;
     private int _activeTab;
     private bool _collectEnabled;
     private bool _combatEnabled;
@@ -36,6 +65,32 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private string _editingAmmoTarget;
     private TargetCategory _editingAmmoCategory;
     private string _editingAmmoName;
+
+    // Styles (construits dans OnGUI : GUI.skin n'est accessible que là)
+    private bool _stylesReady;
+    private Texture2D _texBg;
+    private GUIStyle _sWindow;
+    private GUIStyle _sHeader;
+    private GUIStyle _sTitle;
+    private GUIStyle _sCard;
+    private GUIStyle _sCardTitle;
+    private GUIStyle _sLabel;
+    private GUIStyle _sMuted;
+    private GUIStyle _sValue;
+    private GUIStyle _sTab;
+    private GUIStyle _sTabOn;
+    private GUIStyle _sBtn;
+    private GUIStyle _sBtnPrimary;
+    private GUIStyle _sBtnDanger;
+    private GUIStyle _sSwitchOn;
+    private GUIStyle _sSwitchOff;
+    private GUIStyle _sSeg;
+    private GUIStyle _sSegOn;
+    private GUIStyle _sRow;
+    private GUIStyle _sRowOn;
+    private GUIStyle _sSlider;
+    private GUIStyle _sThumb;
+    private GUIStyle _sPill;
 
     public BotTestConsoleBehaviour(IntPtr ptr) : base(ptr)
     {
@@ -54,98 +109,160 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     {
         if (Input.GetKeyDown(KeyCode.F8))
             _visible = !_visible;
-        if (Input.GetKeyDown(KeyCode.F9))
-            _npcDebugVisible = !_npcDebugVisible;
     }
+
+    // ------------------------------------------------------------------ OnGUI
 
     private void OnGUI()
     {
-        if (_npcDebugVisible)
-            DrawNpcCombatPanel();
-
         if (!_visible)
             return;
 
-        _panel.width = Mathf.Min(_panel.width, Mathf.Max(320f, Screen.width - 16f));
-        _panel.height = Mathf.Min(_panel.height, Mathf.Max(240f, Screen.height - 16f));
+        EnsureStyles();
+
+        _panel.width = Mathf.Min(_panel.width, Mathf.Max(380f, Screen.width - 16f));
+        _panel.height = Mathf.Min(_panel.height, Mathf.Max(320f, Screen.height - 16f));
         _panel.x = Mathf.Clamp(_panel.x, 0f, Mathf.Max(0f, Screen.width - _panel.width));
         _panel.y = Mathf.Clamp(_panel.y, 0f, Mathf.Max(0f, Screen.height - _panel.height));
-        GUI.Box(_panel, "BOT TEST CONSOLE  |  F8 hide/show");
-        GUILayout.BeginArea(new Rect(_panel.x + 8f, _panel.y + 24f, _panel.width - 16f, _panel.height - 32f));
-        GUILayout.BeginVertical();
-        GUILayout.BeginHorizontal();
-        DrawTabButton(0, "Automation");
-        DrawTabButton(1, "Target selection + ammo");
-        DrawTabButton(2, "Live status");
-        DrawTabButton(3, "Collect");
-        GUILayout.EndHorizontal();
 
-        GUILayout.Space(6f);
-        if (_activeTab == 0)
+        GUI.Box(_panel, GUIContent.none, _sWindow);
+        HandleDrag();
+        DrawHeader();
+        DrawTabBar();
+
+        float bodyTop = _panel.y + HeaderHeight + TabBarHeight + 10f;
+        float bodyHeight = _panel.height - HeaderHeight - TabBarHeight - FooterHeight - 14f;
+        GUILayout.BeginArea(new Rect(_panel.x + 14f, bodyTop, _panel.width - 28f, bodyHeight));
+        _scrollPosition = GUILayout.BeginScrollView(_scrollPosition);
+        switch (_activeTab)
         {
-            DrawControls();
+            case TabControl: DrawControlTab(); break;
+            case TabSurvival: DrawSurvivalTab(); break;
+            case TabTargets: DrawTargetsTab(); break;
+            case TabCollect: DrawCollectTab(); break;
+            default: DrawStatusTab(); break;
         }
-        else if (_activeTab == 1)
-        {
-            DrawTargetConfiguration();
-        }
-        else if (_activeTab == 2)
-        {
-            DrawStatus();
-        }
-        else
-            DrawCollectConfiguration();
-        GUILayout.EndVertical();
+        GUILayout.EndScrollView();
         GUILayout.EndArea();
 
+        GUI.Label(
+            new Rect(_panel.x + 16f, _panel.yMax - FooterHeight - 2f, _panel.width - 32f, FooterHeight),
+            "F8 hide / show   |   drag the header to move",
+            _sMuted);
     }
 
-    private void DrawTabButton(int tab, string label)
+    private void HandleDrag()
     {
-        bool selected = GUILayout.Toggle(_activeTab == tab, label, GUI.skin.button);
-        if (selected)
-            _activeTab = tab;
+        Event e = Event.current;
+        // Zone de déplacement : l'en-tête sans les boutons de droite.
+        Rect grip = new Rect(_panel.x, _panel.y, _panel.width - 240f, HeaderHeight);
+        if (e.type == EventType.MouseDown && grip.Contains(e.mousePosition))
+        {
+            _dragging = true;
+            _dragOffset = e.mousePosition - new Vector2(_panel.x, _panel.y);
+            e.Use();
+        }
+        else if (_dragging && e.type == EventType.MouseDrag)
+        {
+            _panel.x = e.mousePosition.x - _dragOffset.x;
+            _panel.y = e.mousePosition.y - _dragOffset.y;
+            e.Use();
+        }
+        else if (e.type == EventType.MouseUp)
+        {
+            _dragging = false;
+        }
     }
 
-    private void DrawTargetConfiguration()
+    private void DrawHeader()
     {
-        IReadOnlyList<string> npcCatalog = TargetCatalog.Npcs;
-        IReadOnlyList<string> monsterCatalog = TargetCatalog.Monsters;
-        RefreshDisplayCatalogs();
+        GUI.Box(new Rect(_panel.x, _panel.y, _panel.width, HeaderHeight), GUIContent.none, _sHeader);
+        GUI.Label(new Rect(_panel.x + 16f, _panel.y + 10f, 220f, 24f), "ELLYR BOT CONSOLE", _sTitle);
 
-        GUILayout.Label(
-            TargetCatalog.IsInitialized
-                ? "Runtime target catalog: " + npcCatalog.Count + " NPC types, "
-                    + monsterCatalog.Count + " Monster types"
-                : "Runtime target catalog: waiting for network-ready prefab scan");
-        GUILayout.Label(
-            "Live ammo catalog: " + AmmoCatalog.Bullets.Count + " bullet types, "
-            + AmmoCatalog.Harpoons.Count + " harpoon types");
-        GUILayout.Label(
-            "Select a target type below; its ammo mapping applies to every matching runtime instance.");
+        bool running = CopperWire.AutomationEnabled;
+        Rect play = new Rect(_panel.xMax - 108f, _panel.y + 8f, 92f, 28f);
+        if (GUI.Button(play, running ? "STOP" : "PLAY", running ? _sBtnDanger : _sBtnPrimary))
+            CopperWire.SetAutomationEnabled(!running);
 
-        _scrollPosition = GUILayout.BeginScrollView(
-            _scrollPosition,
-            GUILayout.Height(Mathf.Max(140f, _panel.height - 190f)));
-        DrawTargetGroup(TargetCategory.Npc, "NPCs");
-        DrawTargetGroup(TargetCategory.Monster, "Monsters");
-        GUILayout.EndScrollView();
-
-        GUILayout.Label(
-            "Selected target types: " + _selectedNpcs.Count + " NPC, "
-            + _selectedMonsters.Count + " Monster.");
+        Rect pill = new Rect(play.x - 138f, _panel.y + 10f, 128f, 24f);
+        Color previous = GUI.color;
+        GUI.color = StateColor();
+        GUI.Box(pill, GUIContent.none, _sPill);
+        GUI.color = previous;
+        GUI.Label(pill, StateText(), PillTextStyle());
     }
 
-    private void DrawControls()
+    // Style du texte de la pastille : centré, sombre sur fond coloré.
+    private GUIStyle _pillText;
+    private GUIStyle PillTextStyle()
     {
-        GUILayout.BeginHorizontal();
-        string button = CopperWire.AutomationEnabled ? "STOP" : "PLAY";
-        if (GUILayout.Button(button, GUILayout.Width(100f), GUILayout.Height(30f)))
-            CopperWire.SetAutomationEnabled(!CopperWire.AutomationEnabled);
-        GUILayout.Label("Automation: " + (CopperWire.AutomationEnabled ? "ON" : "OFF"));
-        GUILayout.EndHorizontal();
+        if (_pillText == null)
+        {
+            _pillText = new GUIStyle(_sLabel);
+            _pillText.alignment = TextAnchor.MiddleCenter;
+            _pillText.fontStyle = FontStyle.Bold;
+            _pillText.fontSize = 11;
+            _pillText.normal.textColor = new Color(0.06f, 0.07f, 0.09f, 1f);
+        }
+        return _pillText;
+    }
 
-        bool collect = GUILayout.Toggle(_collectEnabled, "Collect");
+    private string StateText()
+    {
+        if (!CopperWire.AutomationEnabled)
+            return "STOPPED";
+        if (RespawnWire.IsActive)
+            return "RESPAWN";
+        if (SurvivalWire.IsFleeing)
+            return "FLEEING";
+        if (SurvivalWire.IsRepairPaused)
+            return "REPAIRING";
+        BehaviorAction action = CopperWire.CurrentAction;
+        return action == null ? "IDLE" : action.Type.ToString().ToUpperInvariant();
+    }
+
+    private Color StateColor()
+    {
+        if (!CopperWire.AutomationEnabled)
+            return ColMuted;
+        if (SurvivalWire.IsFleeing)
+            return ColDanger;
+        if (RespawnWire.IsActive || SurvivalWire.IsRepairPaused)
+            return ColWarn;
+        return ColOk;
+    }
+
+    private void DrawTabBar()
+    {
+        float y = _panel.y + HeaderHeight;
+        float tabWidth = _panel.width / TabLabels.Length;
+        for (int i = 0; i < TabLabels.Length; i++)
+        {
+            Rect rect = new Rect(_panel.x + i * tabWidth, y, tabWidth, TabBarHeight);
+            bool selected = _activeTab == i;
+            if (GUI.Button(rect, TabLabels[i], selected ? _sTabOn : _sTab) && !selected)
+            {
+                _activeTab = i;
+                _scrollPosition = Vector2.zero;
+            }
+            if (selected)
+            {
+                Color previous = GUI.color;
+                GUI.color = ColAccent;
+                GUI.DrawTexture(
+                    new Rect(rect.x + 12f, rect.yMax - 3f, rect.width - 24f, 3f),
+                    Texture2D.whiteTexture);
+                GUI.color = previous;
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ Onglets
+
+    private void DrawControlTab()
+    {
+        BeginCard("Activities", "What the bot is allowed to do while automation is PLAY.");
+        bool collect = Switch(_collectEnabled, "Collect");
         if (collect != _collectEnabled)
         {
             _collectEnabled = collect;
@@ -153,123 +270,121 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             ApplyConfiguration();
         }
 
-        bool combat = GUILayout.Toggle(_combatEnabled, "Combat");
+        bool combat = Switch(_combatEnabled, "Combat");
         if (combat != _combatEnabled)
         {
             _combatEnabled = combat;
             ApplyConfiguration();
         }
+        Hint("Navigation is the default activity when nothing else applies.");
+        EndCard();
 
-        GUILayout.BeginHorizontal();
-        if (GUILayout.Button(
-            _priority == CombatCollectPriority.Collect
-                ? "[Collect priority]"
-                : "Collect priority"))
-        {
-            SetPriority(CombatCollectPriority.Collect);
-        }
-        if (GUILayout.Button(
-            _priority == CombatCollectPriority.Combat
-                ? "[Combat priority]"
-                : "Combat priority"))
-        {
-            SetPriority(CombatCollectPriority.Combat);
-        }
-        GUILayout.EndHorizontal();
+        BeginCard("Priority", "Used when a collectible and a combat target are both available.");
+        int priority = Segmented(
+            _priority == CombatCollectPriority.Collect ? 0 : 1,
+            "Collect first",
+            "Combat first");
+        SetPriority(priority == 0 ? CombatCollectPriority.Collect : CombatCollectPriority.Combat);
+        EndCard();
 
-        bool longRange = GUILayout.Toggle(CopperWire.LongRange, "Long-range combat spacing");
+        BeginCard("Combat");
+        bool longRange = Switch(CopperWire.LongRange, "Long-range combat spacing");
         if (longRange != CopperWire.LongRange)
             CopperWire.SetLongRange(longRange);
-
-        DrawSurvivalControls();
+        EndCard();
     }
 
-    private void DrawSurvivalControls()
+    private void DrawSurvivalTab()
     {
-        // ----- Bloc 1 : Réparation -----
-        GUILayout.BeginVertical(GUI.skin.box);
-        GUILayout.Label("REPAIR");
-        bool repair = GUILayout.Toggle(Plugin.RepairEnabled, "Repair enabled");
+        EtatJeuSnapshot snapshot = GameState.ObtenirSnapshot();
+        FicheJoueur player = snapshot == null ? null : snapshot.Joueur;
+
+        BeginCard("Hull");
+        if (player == null || player.VieMax <= 0)
+        {
+            Hint("Waiting for a GameState player snapshot.");
+        }
+        else
+        {
+            Row("HP", player.Vie + " / " + player.VieMax
+                + "   (" + player.PourcentageVie.ToString("0", CultureInfo.InvariantCulture) + " %)");
+            DrawHpBar(player.PourcentageVie);
+            Row("State", StateText());
+        }
+        EndCard();
+
+        BeginCard("Repair", "Sends the repair command while HP is below the threshold.");
+        bool repair = Switch(Plugin.RepairEnabled, "Repair enabled");
         if (repair != Plugin.RepairEnabled)
             Plugin.SetRepairEnabled(repair);
 
-        GUILayout.BeginHorizontal();
-        if (GUILayout.Button(Plugin.RepairPausesActivity ? "In activity" : "[In activity]"))
-            Plugin.SetRepairPausesActivity(false);
-        if (GUILayout.Button(Plugin.RepairPausesActivity ? "[Stopped]" : "Stopped"))
-            Plugin.SetRepairPausesActivity(true);
-        GUILayout.EndHorizontal();
-        GUILayout.Label(Plugin.RepairPausesActivity
-            ? "Stopped: all activity paused, ship still, resumes at full HP."
-            : "In activity: repair runs during Navigation / Collect / Combat.");
+        int repairMode = Segmented(
+            Plugin.RepairPausesActivity ? 1 : 0,
+            "In activity",
+            "Stopped");
+        Plugin.SetRepairPausesActivity(repairMode == 1);
+        Hint(Plugin.RepairPausesActivity
+            ? "Stopped: all activity is paused and the ship stays still. Activity resumes at full HP."
+            : "In activity: repair runs during Navigation, Collect and Combat; the activity continues.");
 
-        GUILayout.BeginHorizontal();
-        GUILayout.Label("Repair at HP <= " + Plugin.RepairPercent + " %", GUILayout.Width(160f));
-        int repairPercent = Mathf.RoundToInt(
-            GUILayout.HorizontalSlider(Plugin.RepairPercent, 0f, 100f));
-        GUILayout.EndHorizontal();
+        int repairPercent = PercentSlider("Repair at HP <=", Plugin.RepairPercent);
         if (repairPercent != Plugin.RepairPercent)
             Plugin.SetRepairPercent(repairPercent);
-        GUILayout.EndVertical();
+        EndCard();
 
-        // ----- Bloc 2 : PV bas (fuite / arrêt d'activité) -----
-        GUILayout.BeginVertical(GUI.skin.box);
-        GUILayout.Label("LOW HP");
-        bool flee = GUILayout.Toggle(Plugin.FleeEnabled, "Flee enabled");
+        BeginCard("Low HP", "Abandons Combat and keeps navigating until HP recovers.");
+        bool flee = Switch(Plugin.FleeEnabled, "Flee enabled");
         if (flee != Plugin.FleeEnabled)
             Plugin.SetFleeEnabled(flee);
 
-        GUILayout.BeginHorizontal();
-        GUILayout.Label("Flee at HP <= " + Plugin.FleePercent + " %", GUILayout.Width(160f));
-        int fleePercent = Mathf.RoundToInt(
-            GUILayout.HorizontalSlider(Plugin.FleePercent, 0f, 100f));
-        GUILayout.EndHorizontal();
+        int fleePercent = PercentSlider("Flee at HP <=", Plugin.FleePercent);
         if (fleePercent != Plugin.FleePercent)
             Plugin.SetFleePercent(fleePercent);
 
-        bool fleeCollect = GUILayout.Toggle(
-            Plugin.FleeCollectEnabled, "Collect while fleeing");
+        bool fleeCollect = Switch(Plugin.FleeCollectEnabled, "Collect while fleeing");
         if (fleeCollect != Plugin.FleeCollectEnabled)
             Plugin.SetFleeCollectEnabled(fleeCollect);
-        GUILayout.EndVertical();
-
-        if (SurvivalWire.IsFleeing)
-            GUILayout.Label("State: FLEEING");
-        else if (SurvivalWire.IsRepairPaused)
-            GUILayout.Label("State: PAUSED (repairing)");
+        Hint("Flee ends once HP is above both the flee and repair thresholds.");
+        EndCard();
     }
 
-    [HideFromIl2Cpp]
-    private void DrawCollectConfiguration()
+    private void DrawTargetsTab()
+    {
+        IReadOnlyList<string> npcCatalog = TargetCatalog.Npcs;
+        IReadOnlyList<string> monsterCatalog = TargetCatalog.Monsters;
+        RefreshDisplayCatalogs();
+
+        BeginCard("Catalogs", "Select a target type; its ammo applies to every matching instance.");
+        Row("Targets", TargetCatalog.IsInitialized
+            ? npcCatalog.Count + " NPC types, " + monsterCatalog.Count + " monster types"
+            : "waiting for network-ready prefab scan");
+        Row("Ammo", AmmoCatalog.Bullets.Count + " bullet types, "
+            + AmmoCatalog.Harpoons.Count + " harpoon types");
+        Row("Selected", _selectedNpcs.Count + " NPC, " + _selectedMonsters.Count + " monster");
+        EndCard();
+
+        DrawTargetGroup(TargetCategory.Npc, "NPCs");
+        DrawTargetGroup(TargetCategory.Monster, "Monsters");
+    }
+
+    private void DrawCollectTab()
     {
         RefreshCollectibleCatalog();
 
-        GUILayout.BeginHorizontal();
-        string automationButton = CopperWire.AutomationEnabled ? "STOP" : "PLAY";
-        if (GUILayout.Button(automationButton, GUILayout.Width(100f), GUILayout.Height(28f)))
-            CopperWire.SetAutomationEnabled(!CopperWire.AutomationEnabled);
-        GUILayout.Label("Automation: " + (CopperWire.AutomationEnabled ? "ON" : "OFF"));
-        GUILayout.EndHorizontal();
+        BeginCard("Status");
+        Row("Collect", _collectEnabled ? "ON (Control tab)" : "OFF (Control tab)");
+        Row("Catalog", CollectibleCatalog.IsInitialized
+            ? _displayCollectibleTypes.Count + " types"
+            : "waiting for local player");
+        Hint(CollectionStatusMessage());
+        EndCard();
 
-        GUILayout.Label(
-            CollectibleCatalog.IsInitialized
-                ? "Runtime collectible catalog: " + _displayCollectibleTypes.Count + " types"
-                : "Runtime collectible catalog: waiting for local player");
-
-        GUILayout.Label(
-            "Global Collect toggle: " + (_collectEnabled ? "ON" : "OFF")
-            + " (change it in the Automation tab)");
-
-        DrawCollectionRuntimeStatus();
-
-        _scrollPosition = GUILayout.BeginScrollView(
-            _scrollPosition,
-            GUILayout.Height(Mathf.Max(120f, _panel.height - 180f)));
+        BeginCard("Collectible types", _enabledCollectibleTypes.Count + " enabled");
         for (int i = 0; i < _displayCollectibleTypes.Count; i++)
         {
             string typeName = _displayCollectibleTypes[i];
             bool wasEnabled = _enabledCollectibleTypes.Contains(typeName);
-            bool isEnabled = GUILayout.Toggle(wasEnabled, typeName);
+            bool isEnabled = RowToggle(wasEnabled, typeName);
             if (isEnabled != wasEnabled)
             {
                 Plugin.SetCollectibleTypeEnabled(typeName, isEnabled);
@@ -280,11 +395,305 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
                 ApplyConfiguration();
             }
         }
-        GUILayout.EndScrollView();
+        if (_displayCollectibleTypes.Count == 0)
+            Hint("No collectible type yet.");
+        EndCard();
     }
 
+    private void DrawStatusTab()
+    {
+        BehaviorAction action = CopperWire.CurrentAction;
+
+        BeginCard("Bot");
+        Row("System", CopperWire.SystemState.ToString());
+        Row("Action", action == null ? "None" : action.Type + " / " + action.State);
+        Row("Respawn", RespawnWire.IsActive
+            ? RespawnWire.IsAbandoned ? "active (attempts abandoned)" : "active"
+            : "inactive");
+
+        CombatTarget target = CopperWire.CurrentCombatTarget;
+        if (target != null)
+        {
+            string category = target.WeaponCategory.HasValue
+                ? target.WeaponCategory.Value.ToString()
+                : "unclassified";
+            Row("Target", target.Name + " (" + category + ")"
+                + (string.IsNullOrEmpty(target.Category) ? string.Empty : " / " + target.Category)
+                + (string.IsNullOrEmpty(target.Type) ? string.Empty : " / " + target.Type));
+            if (target.WeaponCategory.HasValue)
+            {
+                TargetCategory weapon = target.WeaponCategory.Value;
+                Row("Ammo", "desired " + DescribeAmmo(weapon, target.AmmoId)
+                    + " | selected " + DescribeAmmo(weapon, CopperWire.GetSelectedAmmoId(weapon)));
+            }
+        }
+        else if (action != null && action.Type == BehaviorActionType.Collect)
+        {
+            CollectActionContext context = action.Context as CollectActionContext;
+            Row("Collectible", context == null ? "unknown" : "NetId " + context.NetId);
+        }
+        EndCard();
+
+        EtatJeuSnapshot snapshot = GameState.ObtenirSnapshot();
+        FicheJoueur player = snapshot == null ? null : snapshot.Joueur;
+        BeginCard("Player");
+        if (player == null)
+        {
+            Hint("Waiting for a GameState snapshot.");
+        }
+        else
+        {
+            Row("HP", player.Vie + " / " + player.VieMax);
+            Row("Range", "cannon " + FormatNumber(player.Portee)
+                + " | harpoon " + FormatNumber(player.PorteeHarpon));
+            Row("Map", player.Harita
+                + (string.IsNullOrEmpty(player.NomHarita) ? string.Empty : " / " + player.NomHarita));
+            Row("Position", (player.CoordonneeSayi ?? "?") + " " + (player.CoordonneeHarf ?? "?")
+                + " | world " + FormatNumber(player.X) + ", " + FormatNumber(player.Y));
+        }
+        EndCard();
+    }
+
+    // ------------------------------------------------------------------ Composants
+
+    private void BeginCard(string title, string subtitle = null)
+    {
+        GUILayout.BeginVertical(_sCard);
+        GUILayout.Label(title.ToUpperInvariant(), _sCardTitle);
+        if (!string.IsNullOrEmpty(subtitle))
+            GUILayout.Label(subtitle, _sMuted);
+        GUILayout.Space(4f);
+    }
+
+    private void EndCard()
+    {
+        GUILayout.EndVertical();
+        GUILayout.Space(10f);
+    }
+
+    private void Hint(string text)
+    {
+        GUILayout.Label(text, _sMuted);
+    }
+
+    private void Row(string label, string value)
+    {
+        GUILayout.BeginHorizontal();
+        GUILayout.Label(label, _sMuted, GUILayout.Width(110f));
+        GUILayout.Label(value, _sLabel);
+        GUILayout.EndHorizontal();
+    }
+
+    private bool Switch(bool value, string label)
+    {
+        GUILayout.BeginHorizontal();
+        bool clicked = GUILayout.Button(
+            value ? "ON" : "OFF",
+            value ? _sSwitchOn : _sSwitchOff,
+            GUILayout.Width(54f),
+            GUILayout.Height(24f));
+        GUILayout.Label(label, _sLabel);
+        GUILayout.EndHorizontal();
+        return clicked ? !value : value;
+    }
+
+    private int Segmented(int index, string first, string second)
+    {
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button(first, index == 0 ? _sSegOn : _sSeg, GUILayout.Height(26f)))
+            index = 0;
+        if (GUILayout.Button(second, index == 1 ? _sSegOn : _sSeg, GUILayout.Height(26f)))
+            index = 1;
+        GUILayout.EndHorizontal();
+        return index;
+    }
+
+    private int PercentSlider(string label, int value)
+    {
+        GUILayout.BeginHorizontal();
+        GUILayout.Label(label, _sLabel, GUILayout.Width(130f));
+        float slid = GUILayout.HorizontalSlider(value, 0f, 100f, _sSlider, _sThumb);
+        GUILayout.Label(Mathf.RoundToInt(slid) + " %", _sValue, GUILayout.Width(52f));
+        GUILayout.EndHorizontal();
+        return Mathf.RoundToInt(slid);
+    }
+
+    private bool RowToggle(bool value, string label)
+    {
+        return GUILayout.Button(label, value ? _sRowOn : _sRow) ? !value : value;
+    }
+
+    private void DrawHpBar(float percent)
+    {
+        Rect r = GUILayoutUtility.GetRect(10f, 16f, GUILayout.ExpandWidth(true));
+        float clamped = Mathf.Clamp(percent, 0f, 100f);
+        Color fill = ColOk;
+        if (Plugin.RepairEnabled && clamped <= Plugin.RepairPercent)
+            fill = ColDanger;
+        else if (Plugin.FleeEnabled && clamped <= Plugin.FleePercent)
+            fill = ColWarn;
+
+        Color previous = GUI.color;
+        GUI.color = ColField;
+        GUI.DrawTexture(r, Texture2D.whiteTexture);
+        GUI.color = fill;
+        GUI.DrawTexture(new Rect(r.x, r.y, r.width * clamped / 100f, r.height), Texture2D.whiteTexture);
+        if (Plugin.RepairEnabled)
+        {
+            GUI.color = ColAccent;
+            GUI.DrawTexture(
+                new Rect(r.x + r.width * Plugin.RepairPercent / 100f - 1f, r.y - 2f, 2f, r.height + 4f),
+                Texture2D.whiteTexture);
+        }
+        if (Plugin.FleeEnabled)
+        {
+            GUI.color = ColWarn;
+            GUI.DrawTexture(
+                new Rect(r.x + r.width * Plugin.FleePercent / 100f - 1f, r.y - 2f, 2f, r.height + 4f),
+                Texture2D.whiteTexture);
+        }
+        GUI.color = previous;
+        GUILayout.Space(2f);
+        Hint("Markers: blue = repair threshold, orange = flee threshold.");
+    }
+
+    // ------------------------------------------------------------------ Styles
+
+    private static Texture2D MakeTexture(Color color)
+    {
+        Texture2D texture = new Texture2D(1, 1);
+        texture.SetPixel(0, 0, color);
+        texture.Apply();
+        texture.hideFlags = HideFlags.HideAndDontSave;
+        return texture;
+    }
+
+    private static void Paint(GUIStyle style, Color normal, Color hover, Color text)
+    {
+        style.normal.background = MakeTexture(normal);
+        style.hover.background = MakeTexture(hover);
+        style.active.background = MakeTexture(hover);
+        style.focused.background = MakeTexture(normal);
+        style.normal.textColor = text;
+        style.hover.textColor = text;
+        style.active.textColor = text;
+        style.focused.textColor = text;
+    }
+
+    private void EnsureStyles()
+    {
+        if (_stylesReady && _texBg != null)
+            return;
+
+        _texBg = MakeTexture(ColBg);
+        GUISkin skin = GUI.skin;
+
+        _sWindow = new GUIStyle(skin.box);
+        _sWindow.normal.background = _texBg;
+        _sWindow.border = new RectOffset(0, 0, 0, 0);
+
+        _sHeader = new GUIStyle(skin.box);
+        _sHeader.normal.background = MakeTexture(ColHeader);
+        _sHeader.border = new RectOffset(0, 0, 0, 0);
+
+        _sPill = new GUIStyle(skin.box);
+        _sPill.normal.background = Texture2D.whiteTexture;
+        _sPill.border = new RectOffset(0, 0, 0, 0);
+
+        _sCard = new GUIStyle(skin.box);
+        _sCard.normal.background = MakeTexture(ColCard);
+        _sCard.border = new RectOffset(0, 0, 0, 0);
+        _sCard.padding = new RectOffset(14, 14, 12, 12);
+        _sCard.margin = new RectOffset(0, 0, 0, 0);
+
+        _sLabel = new GUIStyle(skin.label);
+        _sLabel.fontSize = 13;
+        _sLabel.alignment = TextAnchor.MiddleLeft;
+        _sLabel.wordWrap = true;
+        _sLabel.normal.textColor = ColText;
+
+        _sTitle = new GUIStyle(_sLabel);
+        _sTitle.fontSize = 14;
+        _sTitle.fontStyle = FontStyle.Bold;
+        _sTitle.wordWrap = false;
+
+        _sCardTitle = new GUIStyle(_sLabel);
+        _sCardTitle.fontSize = 11;
+        _sCardTitle.fontStyle = FontStyle.Bold;
+        _sCardTitle.normal.textColor = ColAccent;
+
+        _sMuted = new GUIStyle(_sLabel);
+        _sMuted.fontSize = 12;
+        _sMuted.normal.textColor = ColMuted;
+
+        _sValue = new GUIStyle(_sLabel);
+        _sValue.alignment = TextAnchor.MiddleRight;
+        _sValue.fontStyle = FontStyle.Bold;
+
+        _sTab = new GUIStyle(skin.button);
+        Paint(_sTab, ColHeader, ColCard, ColMuted);
+        _sTab.border = new RectOffset(0, 0, 0, 0);
+        _sTab.fontSize = 13;
+
+        _sTabOn = new GUIStyle(_sTab);
+        Paint(_sTabOn, ColHeader, ColHeader, ColText);
+        _sTabOn.fontStyle = FontStyle.Bold;
+
+        _sBtn = new GUIStyle(skin.button);
+        Paint(_sBtn, ColField, ColFieldHover, ColText);
+        _sBtn.border = new RectOffset(0, 0, 0, 0);
+        _sBtn.fontSize = 12;
+
+        _sBtnPrimary = new GUIStyle(_sBtn);
+        Paint(_sBtnPrimary, ColAccent, new Color(0.35f, 0.72f, 1f, 1f), new Color(0.04f, 0.07f, 0.1f, 1f));
+        _sBtnPrimary.fontStyle = FontStyle.Bold;
+
+        _sBtnDanger = new GUIStyle(_sBtn);
+        Paint(_sBtnDanger, ColDanger, new Color(1f, 0.48f, 0.46f, 1f), new Color(0.1f, 0.03f, 0.03f, 1f));
+        _sBtnDanger.fontStyle = FontStyle.Bold;
+
+        _sSwitchOn = new GUIStyle(_sBtn);
+        Paint(_sSwitchOn, ColOk, new Color(0.4f, 0.93f, 0.7f, 1f), new Color(0.03f, 0.1f, 0.07f, 1f));
+        _sSwitchOn.fontStyle = FontStyle.Bold;
+
+        _sSwitchOff = new GUIStyle(_sBtn);
+        Paint(_sSwitchOff, ColField, ColFieldHover, ColMuted);
+        _sSwitchOff.fontStyle = FontStyle.Bold;
+
+        _sSeg = new GUIStyle(_sBtn);
+        _sSegOn = new GUIStyle(_sBtn);
+        Paint(_sSegOn, ColAccentDim, ColAccentDim, ColText);
+        _sSegOn.fontStyle = FontStyle.Bold;
+
+        _sRow = new GUIStyle(_sBtn);
+        _sRow.alignment = TextAnchor.MiddleLeft;
+        _sRow.padding = new RectOffset(12, 8, 4, 4);
+        Paint(_sRow, ColCard, ColFieldHover, ColMuted);
+
+        _sRowOn = new GUIStyle(_sRow);
+        Paint(_sRowOn, ColAccentDim, ColAccentDim, ColText);
+
+        _sSlider = new GUIStyle(skin.horizontalSlider);
+        _sSlider.normal.background = MakeTexture(ColField);
+        _sSlider.fixedHeight = 6f;
+        _sSlider.border = new RectOffset(0, 0, 0, 0);
+
+        _sThumb = new GUIStyle(skin.horizontalSliderThumb);
+        _sThumb.normal.background = MakeTexture(ColAccent);
+        _sThumb.hover.background = MakeTexture(new Color(0.35f, 0.72f, 1f, 1f));
+        _sThumb.active.background = _sThumb.hover.background;
+        _sThumb.fixedWidth = 14f;
+        _sThumb.fixedHeight = 14f;
+        _sThumb.border = new RectOffset(0, 0, 0, 0);
+
+        _pillText = null;
+        _stylesReady = true;
+    }
+
+    // ------------------------------------------------------------------ Collecte
+
     [HideFromIl2Cpp]
-    private void DrawCollectionRuntimeStatus()
+    private string CollectionStatusMessage()
     {
         EtatJeuSnapshot snapshot = GameState.ObtenirSnapshot();
         BehaviorAction action = CopperWire.CurrentAction;
@@ -305,50 +714,31 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             }
         }
 
-        GUILayout.Label(
-            "Live collectibles: " + observedCount
+        string counts = "Live collectibles: " + observedCount
             + " | matching enabled types: " + enabledObservedCount
-            + " | enabled types: " + _enabledCollectibleTypes.Count);
+            + " | enabled types: " + _enabledCollectibleTypes.Count + ". ";
 
         if (!CopperWire.AutomationEnabled)
-        {
-            GUILayout.Label("Collection is blocked: press PLAY (automation starts STOP).");
-        }
-        else if (!_collectEnabled)
-        {
-            GUILayout.Label("Collection is blocked: turn on the global Collect toggle.");
-        }
-        else if (_enabledCollectibleTypes.Count == 0)
-        {
-            GUILayout.Label("Collection is blocked: enable at least one collectible type below.");
-        }
-        else if (snapshot == null || snapshot.Joueur == null)
-        {
-            GUILayout.Label("Collection is waiting for a GameState player snapshot.");
-        }
-        else if (observedCount == 0)
-        {
-            GUILayout.Label("No collectible is currently visible in the GameState snapshot.");
-        }
-        else if (enabledObservedCount == 0)
-        {
-            GUILayout.Label("Collectibles are visible, but none match an enabled type.");
-        }
-        else if (action != null && action.Type == BehaviorActionType.Collect)
+            return counts + "Collection is blocked: press PLAY (automation starts STOP).";
+        if (!_collectEnabled)
+            return counts + "Collection is blocked: turn on Collect in the Control tab.";
+        if (_enabledCollectibleTypes.Count == 0)
+            return counts + "Collection is blocked: enable at least one collectible type below.";
+        if (snapshot == null || snapshot.Joueur == null)
+            return counts + "Waiting for a GameState player snapshot.";
+        if (observedCount == 0)
+            return counts + "No collectible is currently visible in the GameState snapshot.";
+        if (enabledObservedCount == 0)
+            return counts + "Collectibles are visible, but none match an enabled type.";
+        if (action != null && action.Type == BehaviorActionType.Collect)
         {
             CollectActionContext context = action.Context as CollectActionContext;
-            GUILayout.Label(
-                "Collect action: " + action.State
-                + (context == null ? string.Empty : " | NetId " + context.NetId + " | " + context.Type));
+            return counts + "Collect action: " + action.State
+                + (context == null ? string.Empty : " | NetId " + context.NetId + " | " + context.Type);
         }
-        else if (action != null)
-        {
-            GUILayout.Label("Current action: " + action.Type + " / " + action.State);
-        }
-        else
-        {
-            GUILayout.Label("An eligible collectible is visible; waiting for the next planner tick.");
-        }
+        if (action != null)
+            return counts + "Current action: " + action.Type + " / " + action.State;
+        return counts + "An eligible collectible is visible; waiting for the next planner tick.";
     }
 
     [HideFromIl2Cpp]
@@ -389,60 +779,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         ApplyConfiguration();
     }
 
-    private void DrawStatus()
-    {
-        BehaviorAction action = CopperWire.CurrentAction;
-        GUILayout.Label(
-            "System: " + CopperWire.SystemState
-            + " | Action: " + (action == null ? "None" : action.Type + " / " + action.State));
-        GUILayout.Label(
-            "Respawn: " + (RespawnWire.IsActive
-                ? RespawnWire.IsAbandoned ? "active (attempts abandoned)" : "active"
-                : "inactive"));
-
-        CombatTarget target = CopperWire.CurrentCombatTarget;
-        if (target != null)
-        {
-            string category = target.WeaponCategory.HasValue
-                ? target.WeaponCategory.Value.ToString()
-                : "unclassified";
-            GUILayout.Label(
-                "Target: " + target.Name + " (" + category + ")"
-                + (string.IsNullOrEmpty(target.Category) ? string.Empty : " / " + target.Category)
-                + (string.IsNullOrEmpty(target.Type) ? string.Empty : " / " + target.Type));
-            if (target.WeaponCategory.HasValue)
-            {
-                TargetCategory weapon = target.WeaponCategory.Value;
-                GUILayout.Label(
-                    "Ammo: desired " + DescribeAmmo(weapon, target.AmmoId)
-                    + " | selected " + DescribeAmmo(weapon, CopperWire.GetSelectedAmmoId(weapon)));
-            }
-        }
-        else if (action != null && action.Type == BehaviorActionType.Collect)
-        {
-            CollectActionContext context = action.Context as CollectActionContext;
-            GUILayout.Label("Collectible: " + (context == null ? "unknown" : "NetId " + context.NetId));
-        }
-
-        EtatJeuSnapshot snapshot = GameState.ObtenirSnapshot();
-        FicheJoueur player = snapshot == null ? null : snapshot.Joueur;
-        if (player == null)
-        {
-            GUILayout.Label("Player status: waiting for GameState snapshot");
-            return;
-        }
-
-        GUILayout.Label("HP: " + player.Vie + " / " + player.VieMax);
-        GUILayout.Label(
-            "Range: cannon " + FormatNumber(player.Portee)
-            + " | harpoon " + FormatNumber(player.PorteeHarpon));
-        GUILayout.Label(
-            "Map: " + player.Harita
-            + (string.IsNullOrEmpty(player.NomHarita) ? string.Empty : " / " + player.NomHarita));
-        GUILayout.Label(
-            "Coordinates: " + (player.CoordonneeSayi ?? "?") + " " + (player.CoordonneeHarf ?? "?")
-            + " | world " + FormatNumber(player.X) + ", " + FormatNumber(player.Y));
-    }
+    // ------------------------------------------------------------------ Cibles
 
     [HideFromIl2Cpp]
     private void DrawTargetGroup(
@@ -452,10 +789,11 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         List<string> catalog = category == TargetCategory.Monster
             ? _displayMonsters
             : _displayNpcs;
-        GUILayout.Label(label + " (catalog types)");
+        BeginCard(label, catalog.Count + " types in catalog");
         if (!TargetCatalog.IsInitialized)
         {
-            GUILayout.Label("Waiting for the runtime target catalog.");
+            Hint("Waiting for the runtime target catalog.");
+            EndCard();
             return;
         }
 
@@ -466,7 +804,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
             GUILayout.BeginHorizontal();
             bool wasSelected = IsTargetSelected(category, name);
-            bool isSelected = GUILayout.Toggle(wasSelected, name);
+            bool isSelected = RowToggle(wasSelected, name);
             if (isSelected != wasSelected)
             {
                 SetTargetSelected(category, name, isSelected);
@@ -489,10 +827,10 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
                 IReadOnlyList<AmmoDefinition> ammo = GetAmmoCatalog(category);
                 int? id = ResolveAmmo(category, name);
                 string caption = ammo.Count == 0
-                    ? (category == TargetCategory.Npc ? "Boulet indisponible" : "Ammo unavailable")
-                    : (category == TargetCategory.Npc ? "Boulet: " : "Harpoon: ")
+                    ? (category == TargetCategory.Npc ? "Cannonball unavailable" : "Ammo unavailable")
+                    : (category == TargetCategory.Npc ? "Cannonball: " : "Harpoon: ")
                         + DescribeAmmo(category, id);
-                if (GUILayout.Button(caption, GUILayout.Width(260f)))
+                if (GUILayout.Button(caption, _sBtn, GUILayout.Width(260f), GUILayout.Height(26f)))
                 {
                     if (string.Equals(_editingAmmoTarget, targetKey, StringComparison.OrdinalIgnoreCase))
                     {
@@ -518,7 +856,8 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         }
 
         if (catalog.Count == 0)
-            GUILayout.Label("No types in this catalog.");
+            Hint("No types in this catalog.");
+        EndCard();
     }
 
     private void RefreshDisplayCatalogs()
@@ -574,12 +913,13 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             return;
         }
 
-        GUILayout.BeginVertical("box");
+        GUILayout.BeginVertical(_sCard);
         GUILayout.Label(
-            (_editingAmmoCategory == TargetCategory.Npc ? "Boulets pour NPC / " : "Harpons pour Monster / ")
+            (_editingAmmoCategory == TargetCategory.Npc ? "Cannonballs for NPC / " : "Harpoons for Monster / ")
             + _editingAmmoName
-            + " (applies to every runtime instance)");
-        if (GUILayout.Button("Close ammo list"))
+            + " (applies to every runtime instance)",
+            _sMuted);
+        if (GUILayout.Button("Close ammo list", _sBtn, GUILayout.Height(24f)))
         {
             CloseAmmoEditor();
             GUILayout.EndVertical();
@@ -589,7 +929,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         IReadOnlyList<AmmoDefinition> catalog = GetAmmoCatalog(_editingAmmoCategory);
         if (catalog.Count == 0)
         {
-            GUILayout.Label("Waiting for the matching live ammo catalog.");
+            Hint("Waiting for the matching live ammo catalog.");
         }
         else
         {
@@ -598,7 +938,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             {
                 AmmoDefinition ammo = catalog[i];
                 bool isSelected = currentId.HasValue && currentId.Value == ammo.Id;
-                bool choose = GUILayout.Toggle(isSelected, FormatAmmo(ammo), GUI.skin.button);
+                bool choose = RowToggle(isSelected, FormatAmmo(ammo));
                 if (choose && !isSelected)
                 {
                     _ammoByTarget[_editingAmmoTarget] = ammo.Id;
@@ -607,6 +947,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             }
         }
         GUILayout.EndVertical();
+        GUILayout.Space(6f);
     }
 
     private void ApplyConfiguration()
@@ -693,120 +1034,6 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private static string GetTargetKey(TargetCategory category, string name)
     {
         return category + ":" + TargetCatalog.NormalizeName(name);
-    }
-
-    // Fenêtre de debug du combat NPC (F9) : affiche le calcul fait par CopperWire.
-    private void DrawNpcCombatPanel()
-    {
-        if (!_npcPanelPlaced)
-        {
-            _npcPanel.x = Screen.width - _npcPanel.width - 16f;
-            _npcPanelPlaced = true;
-        }
-        _npcPanel.x = Mathf.Clamp(_npcPanel.x, 0f, Mathf.Max(0f, Screen.width - _npcPanel.width));
-        _npcPanel.y = Mathf.Clamp(_npcPanel.y, 0f, Mathf.Max(0f, Screen.height - _npcPanel.height));
-
-        GUI.Box(_npcPanel, "COMBAT NPC (debug)  |  F9 hide/show");
-        GUILayout.BeginArea(new Rect(_npcPanel.x + 8f, _npcPanel.y + 24f, _npcPanel.width - 16f, _npcPanel.height - 100f));
-
-        NpcCombatDebugInfo info = CopperWire.LastNpcCombat;
-        if (info == null)
-        {
-            GUILayout.Label("Aucun combat contre un NPC pour l'instant.");
-            GUILayout.EndArea();
-            return;
-        }
-
-        float age = Time.time - info.UpdatedAt;
-        GUILayout.Label("Cible : " + info.NpcName + "  (NetId " + info.NetId + ")"
-            + (age > 1.5f ? "  [terminé il y a " + age.ToString("0", CultureInfo.InvariantCulture) + " s]" : string.Empty));
-        GUILayout.Label("Portée du NPC : " + FormatRange(info.NpcRange)
-            + "   |   Ma portée : " + FormatNumber(info.OwnRange)
-            + "   |   Écart : " + (IsFiniteNumber(info.NpcRange) ? FormatNumber(info.OwnRange - info.NpcRange) : "?"));
-        GUILayout.Label("LongRange : " + (info.LongRange ? "coché" : "décoché"));
-        GUILayout.Label("Décision : " + info.Decision);
-        if (info.OutOfReachMode)
-            GUILayout.Label("Zone : de " + FormatNumber(info.ZoneMinimum) + " à " + FormatNumber(info.OwnRange)
-                + "   |   Point visé : " + FormatNumber(info.AimDistance));
-        GUILayout.Label("Distance actuelle : " + FormatNumber(info.Distance) + "  →  " + info.Status);
-        GUILayout.Label("Déplacement : " + info.Movement);
-        GUILayout.Label("Tir de canon confirmé : " + (info.ShotConfirmed ? "oui" : "pas encore"));
-        GUILayout.Label("Vitesse mesurée : moi " + FormatSpeed(info.PlayerSpeed)
-            + " | NPC " + FormatSpeed(info.NpcSpeed)
-            + "   (stat jeu : " + FormatNumber(info.PlayerSpeedStat) + ")");
-
-        EtatJeuSnapshot snapshot = GameState.ObtenirSnapshot();
-        FicheJoueur player = snapshot == null ? null : snapshot.Joueur;
-        string gameCoordinates = player == null
-            ? string.Empty
-            : "  (" + (player.CoordonneeSayi ?? "?") + " " + (player.CoordonneeHarf ?? "?") + ")";
-        GUILayout.Label("Ma position : " + FormatNumber(info.PlayerX) + ", " + FormatNumber(info.PlayerY) + gameCoordinates);
-        GUILayout.Label("Position du NPC : " + FormatNumber(info.NpcX) + ", " + FormatNumber(info.NpcY));
-        GUILayout.EndArea();
-
-        DrawNpcRangeRuler(new Rect(_npcPanel.x + 12f, _npcPanel.y + _npcPanel.height - 72f, _npcPanel.width - 24f, 64f), info);
-    }
-
-    // Règle graduée depuis le NPC (à gauche) : vert = ma portée, rouge = sa portée,
-    // jaune = point visé, blanc = ma distance actuelle.
-    [HideFromIl2Cpp]
-    private static void DrawNpcRangeRuler(Rect area, NpcCombatDebugInfo info)
-    {
-        float npcRange = IsFiniteNumber(info.NpcRange) && info.NpcRange > 0f ? info.NpcRange : 0f;
-        float max = Mathf.Max(info.OwnRange, Mathf.Max(npcRange, info.Distance)) * 1.1f + 0.5f;
-        if (!IsFiniteNumber(max) || max <= 0f)
-            return;
-
-        float left = area.x;
-        float width = area.width;
-        Color previous = GUI.color;
-
-        GUI.color = new Color(0.2f, 0.2f, 0.2f, 0.9f);
-        GUI.DrawTexture(new Rect(left, area.y + 6f, width, 20f), Texture2D.whiteTexture);
-
-        GUI.color = new Color(0.25f, 0.8f, 0.6f, 0.95f);
-        GUI.DrawTexture(new Rect(left, area.y + 6f, RulerX(info.OwnRange, left, width, max) - left, 10f), Texture2D.whiteTexture);
-
-        if (npcRange > 0f)
-        {
-            GUI.color = new Color(0.95f, 0.45f, 0.35f, 0.95f);
-            GUI.DrawTexture(new Rect(left, area.y + 16f, RulerX(npcRange, left, width, max) - left, 10f), Texture2D.whiteTexture);
-        }
-
-        if (info.OutOfReachMode)
-        {
-            GUI.color = new Color(1f, 0.85f, 0.2f, 1f);
-            GUI.DrawTexture(new Rect(RulerX(info.AimDistance, left, width, max) - 1f, area.y + 2f, 2f, 28f), Texture2D.whiteTexture);
-        }
-
-        GUI.color = Color.white;
-        GUI.DrawTexture(new Rect(RulerX(info.Distance, left, width, max) - 1.5f, area.y, 3f, 32f), Texture2D.whiteTexture);
-
-        GUI.color = previous;
-        GUI.Label(new Rect(left, area.y + 32f, 120f, 20f), "0 (NPC)");
-        GUI.Label(new Rect(left + width - 60f, area.y + 32f, 60f, 20f), FormatNumber(max));
-        GUI.Label(new Rect(left, area.y + 46f, width, 20f),
-            "vert : ma portée | rouge : sa portée | jaune : visé | blanc : moi");
-    }
-
-    private static float RulerX(float distance, float left, float width, float max)
-    {
-        return left + Mathf.Clamp01(distance / max) * width;
-    }
-
-    private static bool IsFiniteNumber(float value)
-    {
-        return !float.IsNaN(value) && !float.IsInfinity(value);
-    }
-
-    private static string FormatSpeed(float value)
-    {
-        return IsFiniteNumber(value) ? FormatNumber(value) : "?";
-    }
-
-    private static string FormatRange(float value)
-    {
-        return IsFiniteNumber(value) && value > 0f ? FormatNumber(value) : "illisible";
     }
 
     private static string FormatNumber(float value)
