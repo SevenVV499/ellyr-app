@@ -30,6 +30,7 @@ namespace EtatJoueurMod
         private static ConfigEntry<int> _repairPercent;
         private static ConfigEntry<bool> _fleeEnabled;
         private static ConfigEntry<int> _fleePercent;
+        private static ConfigEntry<bool> _fleeCollectEnabled;
         private static readonly Dictionary<string, ConfigEntry<bool>> CollectibleTypeSettings =
             new Dictionary<string, ConfigEntry<bool>>(StringComparer.Ordinal);
         private static Il2CppSystem.Action _targetCatalogDisconnectHandler;
@@ -106,6 +107,16 @@ namespace EtatJoueurMod
             get { return _fleePercent == null ? 60 : _fleePercent.Value; }
         }
 
+        public static bool FleeCollectEnabled
+        {
+            get { return _fleeCollectEnabled != null && _fleeCollectEnabled.Value; }
+        }
+
+        public static void SetFleeCollectEnabled(bool enabled)
+        {
+            SetSetting(_fleeCollectEnabled, enabled);
+        }
+
         public static void SetRepairEnabled(bool enabled)
         {
             SetSetting(_repairEnabled, enabled);
@@ -142,7 +153,9 @@ namespace EtatJoueurMod
             _repairPercent = _config.Bind("Survival", "RepairPercent", 30,
                 new ConfigDescription("Repair trigger threshold, in percent of max HP.", percentRange));
             _fleeEnabled = _config.Bind("Survival", "FleeEnabled", false,
-                "While HP <= FleePercent, abandon Collect/Combat and only navigate until HP recovers.");
+                "While HP <= FleePercent, abandon Combat (and Collect unless FleeCollectEnabled) and navigate until HP recovers.");
+            _fleeCollectEnabled = _config.Bind("Survival", "FleeCollectEnabled", false,
+                "Allow collecting (never combat) while fleeing.");
             _fleePercent = _config.Bind("Survival", "FleePercent", 60,
                 new ConfigDescription("Flee trigger threshold, in percent of max HP.", percentRange));
         }

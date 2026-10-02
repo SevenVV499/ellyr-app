@@ -195,7 +195,10 @@ public sealed class BluePencil
         _allowCollectible = allowCollectible;
     }
 
-    public BehaviorActionType Decide(EtatJeuSnapshot snapshot, bool navigationOnly = false)
+    public BehaviorActionType Decide(
+        EtatJeuSnapshot snapshot,
+        bool fleeing = false,
+        bool collectWhileFleeing = false)
     {
         if (snapshot == null || snapshot.Joueur == null)
             return BehaviorActionType.None;
@@ -209,37 +212,30 @@ public sealed class BluePencil
         PurgeSkippedCollectiblesNoLongerVisible(snapshot);
         PurgeExcludedMonsterTargets(snapshot);
 
-        // Fuite : seule la Navigation est autorisée, aucun cycle Collect / Combat
-        // ne peut démarrer ni se poursuivre.
-        if (navigationOnly)
-        {
-            BehaviorAction current = _brain.CurrentAction;
-            if (current != null && !current.IsFinished
-                && current.Type != BehaviorActionType.Navigation)
-                _brain.CancelCurrent();
-            DemarrerNavigation();
-            return _brain.CurrentActionType;
-        }
+        // Fuite : plus aucun cycle Combat ; la Collecte n'est permise que si
+        // l'option correspondante est cochée, sinon seule la Navigation reste.
+        bool collectAllowed = _collectEnabled && (!fleeing || collectWhileFleeing);
+        bool combatAllowed = _combatEnabled && !fleeing;
 
         BehaviorAction active = _brain.CurrentAction;
         if (active != null && !active.IsFinished)
         {
             if (active.Type == BehaviorActionType.Collect)
             {
-                if (EvaluerCollecte(snapshot, active))
+                if (collectAllowed && EvaluerCollecte(snapshot, active))
                     return BehaviorActionType.Collect;
             }
             else if (active.Type == BehaviorActionType.Combat)
             {
-                if (EvaluerCombat(snapshot, active))
+                if (combatAllowed && EvaluerCombat(snapshot, active))
                     return BehaviorActionType.Combat;
             }
         }
 
-        CollectibleInfo collectible = _collectEnabled
+        CollectibleInfo collectible = collectAllowed
             ? ObtenirCollectibleCandidat(snapshot)
             : null;
-        CombatTarget combat = _combatEnabled
+        CombatTarget combat = combatAllowed
             ? ObtenirCombatCandidat(snapshot)
             : null;
 

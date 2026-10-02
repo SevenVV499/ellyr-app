@@ -372,9 +372,9 @@ public static class CopperWire
         bool fleeing = SurvivalWire.Tick(player, snapshot, out fleeStarted, out fleeEnded);
         if (fleeing)
         {
-            // La fuite est prioritaire : Collect / Combat sont abandonnés et
-            // interdits, seule la Navigation continue. La réparation (traitée par
-            // SurvivalWire) reste parallèle.
+            // La fuite est prioritaire : Combat abandonné et interdit, Collecte
+            // seulement si l'option est cochée, sinon seule la Navigation continue.
+            // La réparation (traitée par SurvivalWire) reste parallèle.
             AbandonActionForFlee(player);
         }
         else if (fleeEnded)
@@ -414,7 +414,7 @@ public static class CopperWire
         }
         else
         {
-            selected = Planner.Decide(snapshot, fleeing);
+            selected = Planner.Decide(snapshot, fleeing, Plugin.FleeCollectEnabled);
             action = Brain.CurrentAction;
         }
 
@@ -521,13 +521,16 @@ public static class CopperWire
         }
     }
 
-    // Fuite : l'activité Collect / Combat est abandonnée ; la Navigation en cours
-    // (ou une nouvelle) continue normalement, sans déplacement spécifique.
+    // Fuite : le Combat est abandonné (la Collecte aussi, sauf si l'option est
+    // cochée) ; la Navigation en cours continue normalement, sans déplacement
+    // spécifique.
     private static void AbandonActionForFlee(Player player)
     {
         BehaviorAction current = Brain.CurrentAction;
-        if (current != null && current.Type == BehaviorActionType.Navigation
-            && current == _executedAction)
+        if (current != null
+            && current == _executedAction
+            && (current.Type == BehaviorActionType.Navigation
+                || current.Type == BehaviorActionType.Collect && Plugin.FleeCollectEnabled))
             return;
 
         if (_executedAction != null)

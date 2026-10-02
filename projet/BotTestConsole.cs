@@ -208,6 +208,10 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         if (fleePercent != Plugin.FleePercent)
             Plugin.SetFleePercent(fleePercent);
 
+        bool fleeCollect = GUILayout.Toggle(Plugin.FleeCollectEnabled, "Collect while fleeing");
+        if (fleeCollect != Plugin.FleeCollectEnabled)
+            Plugin.SetFleeCollectEnabled(fleeCollect);
+
         if (SurvivalWire.IsFleeing)
             GUILayout.Label("State: FLEEING");
     }

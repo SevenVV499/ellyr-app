@@ -7,7 +7,7 @@ using UnityEngine;
  *
  * - Réparation : parallèle à l'activité. Ne touche jamais au Brain ; elle envoie
  *   seulement Player.tamirOlBaslat() tant que les PV sont sous le seuil.
- * - Fuite : prioritaire. Quand elle démarre, CopperWire abandonne Collect / Combat
+ * - Fuite : prioritaire. Quand elle démarre, CopperWire abandonne Combat (et Collect sauf option)
  *   et n'autorise que la Navigation (déplacements aléatoires habituels) jusqu'à
  *   la sortie de fuite.
  *
