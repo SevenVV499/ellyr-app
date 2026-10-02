@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
 using System.Threading;
@@ -198,24 +199,22 @@ namespace EtatJoueurMod
         private static readonly List<SuiviCoffres.Coffre> CoffresProches = new List<SuiviCoffres.Coffre>();
         private static List<PnjSuivi> PnjsProches = new List<PnjSuivi>();
         private static List<PnjSuivi> _pnjsEnCours = new List<PnjSuivi>();
-        private static readonly List<SuiviCoffres.Coffre> _coffrePool = new List<SuiviCoffres.Coffre>();
-        private static int _coffrePoolIndex;
-        private static readonly List<CollectibleScanResult> _collectibleScanResults =
-            new List<CollectibleScanResult>();
-        private static readonly Dictionary<Type, Il2CppSystem.Type> _collectibleIl2CppTypes =
-            new Dictionary<Type, Il2CppSystem.Type>();
-        private static bool _collectibleScanFailed;
-        private static bool _spawnedIdentityScanFailed;
-        private static List<PnjSuivi> _suiviPool = new List<PnjSuivi>();
-        private static List<PnjSuivi> _suiviPoolPublie = new List<PnjSuivi>();
-        private static int _suiviPoolIndex;
-        private static bool _pnjScanFailed;
+        private static readonly List<Player> _naviresEnCours = new List<Player>();
+        private static readonly List<SuiviCoffres.Coffre> _coffresEnCours = new List<SuiviCoffres.Coffre>();
+        private static Player _joueurLocalEnCours;
+        private static readonly Dictionary<uint, IdentiteScannee> _identitesScannees =
+            new Dictionary<uint, IdentiteScannee>();
+        private static readonly List<uint> _identitesPerimees = new List<uint>();
+        private static int _generationScan;
+        private static List<Func<GameObject, PnjSuivi>> _classifieursPnj;
+        private static List<Func<GameObject, SuiviCoffres.Coffre>> _classifieursCollectibles;
         private static readonly Queue<Action> _fileScan = new Queue<Action>();
         private static float _dernierRemplissage;
         private static int _derniereCarteScannee;
         private static bool _carteScanneeConnue;
-        private const float IntervalleRemplissage = 2.0f;
-        private const int ScansParTick = 1;
+        private const float IntervalleRemplissage = 0.5f;
+        private const int TailleTranche = 32;
+        private const double BudgetScanMs = 1.5;
 
         private class PnjSuivi
         {
@@ -225,11 +224,14 @@ namespace EtatJoueurMod
             public IPnjLecteur Lecteur;
         }
 
-        private struct CollectibleScanResult
+        // Résultat de la classification d'un objet réseau, conservé tant qu'il existe.
+        private sealed class IdentiteScannee
         {
-            public string Categorie;
-            public string Type;
-            public NetworkBehaviour Instance;
+            public NetworkIdentity Identite;
+            public Player Joueur;
+            public List<PnjSuivi> Pnjs;
+            public List<SuiviCoffres.Coffre> Coffres;
+            public int Generation;
         }
 
         private interface IPnjLecteur
@@ -515,99 +517,64 @@ namespace EtatJoueurMod
             {
                 _fileScan.Clear();
                 _identitesSpawned.Clear();
-                _collectibleScanResults.Clear();
+                _identitesScannees.Clear();
                 _pnjsEnCours.Clear();
-                _suiviPoolIndex = 0;
-                _collectibleScanFailed = false;
-                _spawnedIdentityScanFailed = false;
-                _pnjScanFailed = false;
+                _naviresEnCours.Clear();
+                _coffresEnCours.Clear();
             }
 
             if (_fileScan.Count == 0
                 && (mapChanged || Time.time - _dernierRemplissage >= IntervalleRemplissage))
             {
                 _dernierRemplissage = Time.time;
-                RemplirFileDeScan();
+                _fileScan.Enqueue(DebuterCycleScan);
             }
 
-            for (int i = 0; i < ScansParTick && _fileScan.Count > 0; i++)
+            if (_fileScan.Count == 0)
+                return;
+
+            // Budget de temps par image : les tranches s'enchaînent tant qu'il reste du
+            // budget, au moins une par image.
+            long debut = Stopwatch.GetTimestamp();
+            do
             {
                 _fileScan.Dequeue().Invoke();
             }
+            while (_fileScan.Count > 0
+                && (Stopwatch.GetTimestamp() - debut) * 1000.0 / Stopwatch.Frequency < BudgetScanMs);
         }
 
-        private static void RemplirFileDeScan()
+        // ----- Scan des objets réseau -----
+        //
+        // Un cycle liste les objets réseau présents (NetworkClient.spawned), les traite
+        // par tranches puis publie le résultat. Les composants d'un objet ne changent pas
+        // après son apparition : chaque objet n'est donc classé (joueur / PNJ /
+        // collectible) qu'une fois, à sa première apparition, et le résultat est gardé
+        // par netId. Un objet détruit pendant le scan est simplement ignoré.
+
+        private static void DebuterCycleScan()
         {
-            _fileScan.Enqueue(RafraichirJoueurEtNavires);
+            _identitesSpawned.Clear();
+            _pnjsEnCours.Clear();
+            _naviresEnCours.Clear();
+            _coffresEnCours.Clear();
+            _joueurLocalEnCours = null;
 
-            _fileScan.Enqueue(DebuterCycleCoffres);
-            IReadOnlyList<Type> collectibleTypes = CollectibleCatalog.CollectibleTypes;
-            for (int i = 0; i < collectibleTypes.Count; i++)
+            if (!NetworkClient.active || !NetworkClient.ready || NetworkClient.spawned == null)
             {
-                Type collectibleType = collectibleTypes[i];
-                _fileScan.Enqueue(() => ScannerCollectibleType(collectibleType));
-            }
-            _fileScan.Enqueue(FinaliserCycleCoffres);
-
-            _fileScan.Enqueue(DebuterCyclePnj);
-
-            _fileScan.Enqueue(() => ScannerPnj<AllMonsters>("monstre", p => p.geminame, p => p.Can, p => p.MaksCan, p => 0f));
-            _fileScan.Enqueue(() => ScannerPnj<CalypsoAllMonsters>("monstre", p => p.geminame, p => p.Can, p => p.MaksCan, p => 0f));
-            _fileScan.Enqueue(() => ScannerPnj<IceAllMonsters>("monstre", p => p.geminame, p => p.Can, p => p.MaksCan, p => 0f));
-            _fileScan.Enqueue(() => ScannerPnj<SampiyonAllMonsters>("monstre", p => p.geminame, p => p.Can, p => p.MaksCan, p => 0f));
-            _fileScan.Enqueue(() => ScannerPnj<MonsterAdmiral>("boss", p => p.geminame, p => p.Can, p => p.MaksCan, p => 0f));
-
-            _fileScan.Enqueue(() => ScannerPnj<AllNpcs>("npc_navire", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<BonusMapAllNpcs>("npc_navire", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<BaronAdmiral>("boss", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<DragonAdmiral>("boss", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
-
-            _fileScan.Enqueue(() => ScannerPnj<EventShip>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<BaronShip>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<BaronEtkinlikShip>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<EtkinlikAnaGemileri>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<EtkinlikAnaGemileriBonus>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<EtkinlikAnaGemileriKorsan>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<EtkinlikAnaGemileriMagellan>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<EtkinlikAnaGemileriPaskalya>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
-
-            _fileScan.Enqueue(() => ScannerPnj<MiniEventShip>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<RaidProKucuk>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<EtkinlikKucukGemileri>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<EtkinlikKucukGemileriBonus>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<EtkinlikKucukGemileriKorsan>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<EtkinlikKucukGemileriMagellan>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<EtkinlikKucukGemiCalypso>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<EtkinlikKucukGemiHel>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<EtkinlikKucukGemiIce>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<EtkinlikKucukGemiIcePearl>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<EtkinlikKucukGemiKaplumbaga>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<EtkinlikKucukGemiMagellan>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<EtkinlikKucukGemiSampiyon>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<EtkinlikKucukGemiValentin>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            _fileScan.Enqueue(() => ScannerPnj<EtkinlikKucukGemiOzgurluk>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-
-            _fileScan.Enqueue(() =>
-            {
-                ScannerPnj<KuleKontrol>("tour_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => 0f);
-                FinaliserCyclePnj();
-            });
-        }
-
-        private static void RafraichirJoueurEtNavires()
-        {
-            try
-            {
-                _identitesSpawned.Clear();
+                // Rien de lisible : la génération PNJ / collectibles publiée est conservée.
                 NaviresProches.Clear();
                 JoueurLocal = null;
+                return;
+            }
 
-                if (!NetworkClient.active || !NetworkClient.ready || NetworkClient.spawned == null)
-                {
-                    _spawnedIdentityScanFailed = true;
-                    return;
-                }
+            // Le catalogue de collectibles est nécessaire pour classer un objet.
+            if (!CollectibleCatalog.IsInitialized)
+                return;
 
+            try
+            {
+                PreparerClassifieurs();
                 foreach (var pair in NetworkClient.spawned)
                 {
                     NetworkIdentity identity = pair.Value;
@@ -615,186 +582,230 @@ namespace EtatJoueurMod
                         continue;
 
                     _identitesSpawned.Add(identity);
-                    Player player = identity.GetComponent<Player>();
-                    if (player == null)
-                        continue;
-
-                    if (player.isLocalPlayer)
-                        JoueurLocal = player;
-                    else
-                        NaviresProches.Add(player);
                 }
-
-                _spawnedIdentityScanFailed = false;
             }
             catch (Exception e)
             {
                 _identitesSpawned.Clear();
                 NaviresProches.Clear();
-                _spawnedIdentityScanFailed = true;
+                JoueurLocal = null;
                 Plugin.Logger.LogError($"[EtatJoueur] Erreur lecture NetworkClient.spawned : {e}");
-            }
-        }
-
-        private static void DebuterCyclePnj()
-        {
-            _pnjsEnCours.Clear();
-            _suiviPoolIndex = 0;
-            _pnjScanFailed = false;
-        }
-
-        private static void FinaliserCyclePnj()
-        {
-            if (_pnjScanFailed)
-            {
-                Plugin.Logger.LogWarning(
-                    "[EtatJoueur] Cycle PNJ incomplet; conservation de la génération publiée précédente.");
                 return;
             }
+
+            _generationScan++;
+            for (int debut = 0; debut < _identitesSpawned.Count; debut += TailleTranche)
+            {
+                int d = debut;
+                _fileScan.Enqueue(() => TraiterTranche(d, d + TailleTranche));
+            }
+            _fileScan.Enqueue(FinaliserCycleScan);
+        }
+
+        private static void TraiterTranche(int debut, int fin)
+        {
+            if (fin > _identitesSpawned.Count)
+                fin = _identitesSpawned.Count;
+
+            for (int i = debut; i < fin; i++)
+            {
+                try
+                {
+                    NetworkIdentity identity = _identitesSpawned[i];
+                    if (identity == null)
+                        continue;
+
+                    IdentiteScannee entree;
+                    uint netId = identity.netId;
+                    if (!_identitesScannees.TryGetValue(netId, out entree) || entree.Identite != identity)
+                    {
+                        entree = Classer(identity);
+                        _identitesScannees[netId] = entree;
+                    }
+                    entree.Generation = _generationScan;
+
+                    Player joueur = entree.Joueur;
+                    if (joueur != null)
+                    {
+                        if (joueur.isLocalPlayer)
+                            _joueurLocalEnCours = joueur;
+                        else
+                            _naviresEnCours.Add(joueur);
+                    }
+                    if (entree.Pnjs != null)
+                        _pnjsEnCours.AddRange(entree.Pnjs);
+                    if (entree.Coffres != null)
+                        _coffresEnCours.AddRange(entree.Coffres);
+                }
+                catch (Exception)
+                {
+                    // Objet détruit pendant le scan : ignoré, le cycle reste valide.
+                }
+            }
+        }
+
+        private static IdentiteScannee Classer(NetworkIdentity identity)
+        {
+            GameObject cible = identity.gameObject;
+            var entree = new IdentiteScannee
+            {
+                Identite = identity,
+                Joueur = cible.GetComponent<Player>()
+            };
+
+            for (int i = 0; i < _classifieursPnj.Count; i++)
+            {
+                PnjSuivi pnj = _classifieursPnj[i](cible);
+                if (pnj == null)
+                    continue;
+                if (entree.Pnjs == null)
+                    entree.Pnjs = new List<PnjSuivi>(1);
+                entree.Pnjs.Add(pnj);
+            }
+
+            for (int i = 0; i < _classifieursCollectibles.Count; i++)
+            {
+                SuiviCoffres.Coffre coffre = _classifieursCollectibles[i](cible);
+                if (coffre == null)
+                    continue;
+                if (entree.Coffres == null)
+                    entree.Coffres = new List<SuiviCoffres.Coffre>(1);
+                entree.Coffres.Add(coffre);
+            }
+
+            return entree;
+        }
+
+        private static void FinaliserCycleScan()
+        {
+            JoueurLocal = _joueurLocalEnCours;
+
+            NaviresProches.Clear();
+            NaviresProches.AddRange(_naviresEnCours);
+            CoffresProches.Clear();
+            CoffresProches.AddRange(_coffresEnCours);
 
             List<PnjSuivi> anciensPnjs = PnjsProches;
             PnjsProches = _pnjsEnCours;
             _pnjsEnCours = anciensPnjs;
 
-            List<PnjSuivi> ancienPoolPublie = _suiviPoolPublie;
-            _suiviPoolPublie = _suiviPool;
-            _suiviPool = ancienPoolPublie;
+            // Oubli des objets qui ont disparu depuis le cycle précédent.
+            _identitesPerimees.Clear();
+            foreach (var pair in _identitesScannees)
+            {
+                if (pair.Value.Generation != _generationScan)
+                    _identitesPerimees.Add(pair.Key);
+            }
+            for (int i = 0; i < _identitesPerimees.Count; i++)
+                _identitesScannees.Remove(_identitesPerimees[i]);
         }
 
-        private static PnjSuivi ObtenirOuCreerPnjSuivi()
+        private static void PreparerClassifieurs()
         {
-            if (_suiviPoolIndex < _suiviPool.Count)
-                return _suiviPool[_suiviPoolIndex++];
+            if (_classifieursPnj == null)
+            {
+                var liste = new List<Func<GameObject, PnjSuivi>>();
+            liste.Add(CreerClassifieurPnj<AllMonsters>("monstre", p => p.geminame, p => p.Can, p => p.MaksCan, p => 0f));
+            liste.Add(CreerClassifieurPnj<CalypsoAllMonsters>("monstre", p => p.geminame, p => p.Can, p => p.MaksCan, p => 0f));
+            liste.Add(CreerClassifieurPnj<IceAllMonsters>("monstre", p => p.geminame, p => p.Can, p => p.MaksCan, p => 0f));
+            liste.Add(CreerClassifieurPnj<SampiyonAllMonsters>("monstre", p => p.geminame, p => p.Can, p => p.MaksCan, p => 0f));
+            liste.Add(CreerClassifieurPnj<MonsterAdmiral>("boss", p => p.geminame, p => p.Can, p => p.MaksCan, p => 0f));
+            liste.Add(CreerClassifieurPnj<AllNpcs>("npc_navire", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<BonusMapAllNpcs>("npc_navire", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<BaronAdmiral>("boss", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<DragonAdmiral>("boss", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EventShip>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<BaronShip>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<BaronEtkinlikShip>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikAnaGemileri>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikAnaGemileriBonus>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikAnaGemileriKorsan>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikAnaGemileriMagellan>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikAnaGemileriPaskalya>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<MiniEventShip>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<RaidProKucuk>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemileri>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemileriBonus>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemileriKorsan>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemileriMagellan>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiCalypso>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiHel>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiIce>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiIcePearl>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiKaplumbaga>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiMagellan>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiSampiyon>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiValentin>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiOzgurluk>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<KuleKontrol>("tour_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => 0f));
+                _classifieursPnj = liste;
+            }
 
-            var nouveau = new PnjSuivi();
-            _suiviPool.Add(nouveau);
-            _suiviPoolIndex++;
-            return nouveau;
+            if (_classifieursCollectibles == null)
+            {
+                IReadOnlyList<Type> types = CollectibleCatalog.CollectibleTypes;
+                var liste = new List<Func<GameObject, SuiviCoffres.Coffre>>(types.Count);
+                for (int i = 0; i < types.Count; i++)
+                    liste.Add(CreerClassifieurCollectible(types[i]));
+                _classifieursCollectibles = liste;
+            }
         }
 
-        private static void ScannerPnj<T>(string categorie, Func<T, string> nom, Func<T, int> vie, Func<T, int> vieMax, Func<T, float> portee)
+        private static Func<GameObject, PnjSuivi> CreerClassifieurPnj<T>(
+            string categorie,
+            Func<T, string> nom,
+            Func<T, int> vie,
+            Func<T, int> vieMax,
+            Func<T, float> portee)
             where T : NetworkBehaviour
         {
-            try
+            if (LecteurCache<T>.Valeur == null)
+                LecteurCache<T>.Valeur = new PnjLecteur<T>(nom, vie, vieMax, portee);
+            IPnjLecteur lecteur = LecteurCache<T>.Valeur;
+            Il2CppSystem.Type componentType = (Il2CppSystem.Type)Il2CppType.Of<T>();
+            string nomType = typeof(T).Name;
+
+            return cible =>
             {
-                if (_spawnedIdentityScanFailed)
+                var componentObject = cible.GetComponent(componentType);
+                T typed = componentObject == null ? null : componentObject.TryCast<T>();
+                if (typed == null)
+                    return null;
+
+                return new PnjSuivi
                 {
-                    _pnjScanFailed = true;
-                    return;
-                }
-
-                if (LecteurCache<T>.Valeur == null)
-                    LecteurCache<T>.Valeur = new PnjLecteur<T>(nom, vie, vieMax, portee);
-                var lecteur = LecteurCache<T>.Valeur;
-
-                Il2CppSystem.Type componentType = (Il2CppSystem.Type)Il2CppType.Of<T>();
-                foreach (NetworkIdentity identity in _identitesSpawned)
-                {
-                    var componentObject = identity.gameObject.GetComponent(componentType);
-                    T typed = componentObject == null ? null : componentObject.TryCast<T>();
-                    if (typed == null)
-                        continue;
-
-                    var suivi = ObtenirOuCreerPnjSuivi();
-                    suivi.Categorie = categorie;
-                    suivi.Type = typeof(T).Name;
-                    suivi.Instance = typed;
-                    suivi.Lecteur = lecteur;
-                    _pnjsEnCours.Add(suivi);
-                }
-            }
-            catch (Exception e)
-            {
-                _pnjScanFailed = true;
-                Plugin.Logger.LogError($"[EtatJoueur] Erreur ScannerPnj<{typeof(T).Name}> : {e}");
-            }
-
+                    Categorie = categorie,
+                    Type = nomType,
+                    Instance = typed,
+                    Lecteur = lecteur
+                };
+            };
         }
 
-        private static void DebuterCycleCoffres()
+        private static Func<GameObject, SuiviCoffres.Coffre> CreerClassifieurCollectible(Type collectibleType)
         {
-            _collectibleScanResults.Clear();
-            _collectibleScanFailed = !CollectibleCatalog.IsInitialized || _spawnedIdentityScanFailed;
-        }
+            Il2CppSystem.Type il2CppType = (Il2CppSystem.Type)Il2CppTypeOf
+                .MakeGenericMethod(collectibleType)
+                .Invoke(null, null);
+            string categorie = collectibleType == typeof(Chest) ? "coffre" : "scintille";
+            string nomType = collectibleType.Name;
 
-        private static void FinaliserCycleCoffres()
-        {
-            if (_collectibleScanFailed)
+            return cible =>
             {
-                Plugin.Logger.LogWarning(
-                    "[EtatJoueur] Cycle collectibles incomplet; conservation de la génération publiée précédente.");
-                return;
-            }
+                var componentObject = cible.GetComponent(il2CppType);
+                NetworkBehaviour behaviour = componentObject == null
+                    ? null
+                    : componentObject.TryCast<NetworkBehaviour>();
+                if (behaviour == null)
+                    return null;
 
-            CoffresProches.Clear();
-            _coffrePoolIndex = 0;
-            for (int i = 0; i < _collectibleScanResults.Count; i++)
-            {
-                CollectibleScanResult result = _collectibleScanResults[i];
-                SuiviCoffres.Coffre collectible = ObtenirOuCreerCoffre();
-                collectible.Categorie = result.Categorie;
-                collectible.Type = result.Type;
-                collectible.Instance = result.Instance;
-                CoffresProches.Add(collectible);
-            }
-        }
-
-        private static SuiviCoffres.Coffre ObtenirOuCreerCoffre()
-        {
-            if (_coffrePoolIndex < _coffrePool.Count)
-                return _coffrePool[_coffrePoolIndex++];
-
-            var nouveau = new SuiviCoffres.Coffre();
-            _coffrePool.Add(nouveau);
-            _coffrePoolIndex++;
-            return nouveau;
-        }
-
-        private static void ScannerCollectibleType(Type collectibleType)
-        {
-
-            try
-            {
-                if (!CollectibleCatalog.IsInitialized)
+                return new SuiviCoffres.Coffre
                 {
-                    _collectibleScanFailed = true;
-                    return;
-                }
-
-                Il2CppSystem.Type il2CppType;
-                if (!_collectibleIl2CppTypes.TryGetValue(collectibleType, out il2CppType))
-                {
-                    il2CppType = (Il2CppSystem.Type)Il2CppTypeOf
-                        .MakeGenericMethod(collectibleType)
-                        .Invoke(null, null);
-                    _collectibleIl2CppTypes.Add(collectibleType, il2CppType);
-                }
-
-                foreach (NetworkIdentity identity in _identitesSpawned)
-                {
-                    var componentObject = identity.gameObject.GetComponent(il2CppType);
-                    NetworkBehaviour behaviour = componentObject == null
-                        ? null
-                        : componentObject.TryCast<NetworkBehaviour>();
-                    if (behaviour == null)
-                        continue;
-
-                    _collectibleScanResults.Add(new CollectibleScanResult
-                    {
-                        Categorie = collectibleType == typeof(Chest) ? "coffre" : "scintille",
-                        Type = collectibleType.Name,
-                        Instance = behaviour
-                    });
-                }
-            }
-            catch (Exception e)
-            {
-                _collectibleScanFailed = true;
-                Plugin.Logger.LogError(
-                    "[EtatJoueur] Erreur ScannerCollectibleType<"
-                    + (collectibleType == null ? "null" : collectibleType.Name) + "> : " + e);
-            }
-
+                    Categorie = categorie,
+                    Type = nomType,
+                    Instance = behaviour
+                };
+            };
         }
 
         private static MethodInfo TrouverIl2CppTypeOf()

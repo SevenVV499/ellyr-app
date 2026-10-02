@@ -104,6 +104,15 @@ namespace EtatJoueurMod
         private static readonly Dictionary<Type, ushort> _hashesCollectibles =
             new Dictionary<Type, ushort>();
 
+        // Tous les hashes de RPC de récompense attendus. Permet au hook réseau, appelé
+        // pour chaque message du jeu, d'écarter les autres sans résoudre de type.
+        private static readonly HashSet<ushort> _hashesRecompense = new HashSet<ushort>();
+
+        internal static bool EstHashRecompense(ushort hash)
+        {
+            return _hashesRecompense.Contains(hash);
+        }
+
         internal static ushort CalculerHash(string signature)
         {
             unchecked
@@ -150,6 +159,12 @@ namespace EtatJoueurMod
 
                 _hashesCollectibles[type] = hash;
             }
+
+            _hashesRecompense.Clear();
+            _hashesRecompense.Add(HashAllMonsters);
+            _hashesRecompense.Add(HashAllNpcs);
+            foreach (ushort hash in _hashesCollectibles.Values)
+                _hashesRecompense.Add(hash);
         }
 
         internal static bool TryGetHashCollectible(Type type, out ushort hash)
@@ -345,6 +360,12 @@ namespace EtatJoueurMod
             new System.Collections.Generic.HashSet<(string, ushort)>();
         private static int _premierAppel;
 
+        // Les hashes hors récompense ne sont examinés qu'une fois sur 32 : cela garde
+        // les statistiques de diagnostic (hash périmé) sans payer le coût de résolution
+        // du type à chaque message réseau du jeu.
+        private const int EchantillonnageInconnus = 32;
+        private static int _compteurInconnus;
+
         [HarmonyPrepare]
         public static bool Prepare()
         {
@@ -370,8 +391,12 @@ namespace EtatJoueurMod
         {
             try
             {
-                if (Interlocked.Exchange(ref _premierAppel, 1) == 0)
+                if (_premierAppel == 0 && Interlocked.Exchange(ref _premierAppel, 1) == 0)
                     Plugin.Logger.LogInfo("[EtatJoueur] HandleRemoteCall intercepté : le hook RPC est actif.");
+
+                if (!RpcRecompenses.EstHashRecompense(__1)
+                    && (++_compteurInconnus % EchantillonnageInconnus) != 0)
+                    return;
 
                 if (__instance == null) return;
 
