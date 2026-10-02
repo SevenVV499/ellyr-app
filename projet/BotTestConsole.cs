@@ -198,7 +198,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     {
         if (_pillText == null)
         {
-            _pillText = new GUIStyle(_sLabel);
+            _pillText = CloneStyle(_sLabel);
             _pillText.alignment = TextAnchor.MiddleCenter;
             _pillText.fontStyle = FontStyle.Bold;
             _pillText.fontSize = 11;
@@ -568,6 +568,44 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         return texture;
     }
 
+    // Le constructeur de copie GUIStyle(GUIStyle) n'existe pas dans les assemblies
+    // IL2CPP : copie manuelle des propriétés utilisées.
+    private static GUIStyle CloneStyle(GUIStyle source)
+    {
+        GUIStyle style = new GUIStyle();
+        style.font = source.font;
+        style.fontSize = source.fontSize;
+        style.fontStyle = source.fontStyle;
+        style.alignment = source.alignment;
+        style.wordWrap = source.wordWrap;
+        style.richText = source.richText;
+        style.clipping = source.clipping;
+        style.imagePosition = source.imagePosition;
+        style.stretchWidth = source.stretchWidth;
+        style.stretchHeight = source.stretchHeight;
+        style.fixedWidth = source.fixedWidth;
+        style.fixedHeight = source.fixedHeight;
+        style.padding = CloneOffset(source.padding);
+        style.margin = CloneOffset(source.margin);
+        style.border = CloneOffset(source.border);
+        CopyState(style.normal, source.normal);
+        CopyState(style.hover, source.hover);
+        CopyState(style.active, source.active);
+        CopyState(style.focused, source.focused);
+        return style;
+    }
+
+    private static RectOffset CloneOffset(RectOffset source)
+    {
+        return new RectOffset(source.left, source.right, source.top, source.bottom);
+    }
+
+    private static void CopyState(GUIStyleState target, GUIStyleState source)
+    {
+        target.background = source.background;
+        target.textColor = source.textColor;
+    }
+
     private static void Paint(GUIStyle style, Color normal, Color hover, Color text)
     {
         style.normal.background = MakeTexture(normal);
@@ -588,97 +626,97 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         _texBg = MakeTexture(ColBg);
         GUISkin skin = GUI.skin;
 
-        _sWindow = new GUIStyle(skin.box);
+        _sWindow = CloneStyle(skin.box);
         _sWindow.normal.background = _texBg;
         _sWindow.border = new RectOffset(0, 0, 0, 0);
 
-        _sHeader = new GUIStyle(skin.box);
+        _sHeader = CloneStyle(skin.box);
         _sHeader.normal.background = MakeTexture(ColHeader);
         _sHeader.border = new RectOffset(0, 0, 0, 0);
 
-        _sPill = new GUIStyle(skin.box);
+        _sPill = CloneStyle(skin.box);
         _sPill.normal.background = Texture2D.whiteTexture;
         _sPill.border = new RectOffset(0, 0, 0, 0);
 
-        _sCard = new GUIStyle(skin.box);
+        _sCard = CloneStyle(skin.box);
         _sCard.normal.background = MakeTexture(ColCard);
         _sCard.border = new RectOffset(0, 0, 0, 0);
         _sCard.padding = new RectOffset(14, 14, 12, 12);
         _sCard.margin = new RectOffset(0, 0, 0, 0);
 
-        _sLabel = new GUIStyle(skin.label);
+        _sLabel = CloneStyle(skin.label);
         _sLabel.fontSize = 13;
         _sLabel.alignment = TextAnchor.MiddleLeft;
         _sLabel.wordWrap = true;
         _sLabel.normal.textColor = ColText;
 
-        _sTitle = new GUIStyle(_sLabel);
+        _sTitle = CloneStyle(_sLabel);
         _sTitle.fontSize = 14;
         _sTitle.fontStyle = FontStyle.Bold;
         _sTitle.wordWrap = false;
 
-        _sCardTitle = new GUIStyle(_sLabel);
+        _sCardTitle = CloneStyle(_sLabel);
         _sCardTitle.fontSize = 11;
         _sCardTitle.fontStyle = FontStyle.Bold;
         _sCardTitle.normal.textColor = ColAccent;
 
-        _sMuted = new GUIStyle(_sLabel);
+        _sMuted = CloneStyle(_sLabel);
         _sMuted.fontSize = 12;
         _sMuted.normal.textColor = ColMuted;
 
-        _sValue = new GUIStyle(_sLabel);
+        _sValue = CloneStyle(_sLabel);
         _sValue.alignment = TextAnchor.MiddleRight;
         _sValue.fontStyle = FontStyle.Bold;
 
-        _sTab = new GUIStyle(skin.button);
+        _sTab = CloneStyle(skin.button);
         Paint(_sTab, ColHeader, ColCard, ColMuted);
         _sTab.border = new RectOffset(0, 0, 0, 0);
         _sTab.fontSize = 13;
 
-        _sTabOn = new GUIStyle(_sTab);
+        _sTabOn = CloneStyle(_sTab);
         Paint(_sTabOn, ColHeader, ColHeader, ColText);
         _sTabOn.fontStyle = FontStyle.Bold;
 
-        _sBtn = new GUIStyle(skin.button);
+        _sBtn = CloneStyle(skin.button);
         Paint(_sBtn, ColField, ColFieldHover, ColText);
         _sBtn.border = new RectOffset(0, 0, 0, 0);
         _sBtn.fontSize = 12;
 
-        _sBtnPrimary = new GUIStyle(_sBtn);
+        _sBtnPrimary = CloneStyle(_sBtn);
         Paint(_sBtnPrimary, ColAccent, new Color(0.35f, 0.72f, 1f, 1f), new Color(0.04f, 0.07f, 0.1f, 1f));
         _sBtnPrimary.fontStyle = FontStyle.Bold;
 
-        _sBtnDanger = new GUIStyle(_sBtn);
+        _sBtnDanger = CloneStyle(_sBtn);
         Paint(_sBtnDanger, ColDanger, new Color(1f, 0.48f, 0.46f, 1f), new Color(0.1f, 0.03f, 0.03f, 1f));
         _sBtnDanger.fontStyle = FontStyle.Bold;
 
-        _sSwitchOn = new GUIStyle(_sBtn);
+        _sSwitchOn = CloneStyle(_sBtn);
         Paint(_sSwitchOn, ColOk, new Color(0.4f, 0.93f, 0.7f, 1f), new Color(0.03f, 0.1f, 0.07f, 1f));
         _sSwitchOn.fontStyle = FontStyle.Bold;
 
-        _sSwitchOff = new GUIStyle(_sBtn);
+        _sSwitchOff = CloneStyle(_sBtn);
         Paint(_sSwitchOff, ColField, ColFieldHover, ColMuted);
         _sSwitchOff.fontStyle = FontStyle.Bold;
 
-        _sSeg = new GUIStyle(_sBtn);
-        _sSegOn = new GUIStyle(_sBtn);
+        _sSeg = CloneStyle(_sBtn);
+        _sSegOn = CloneStyle(_sBtn);
         Paint(_sSegOn, ColAccentDim, ColAccentDim, ColText);
         _sSegOn.fontStyle = FontStyle.Bold;
 
-        _sRow = new GUIStyle(_sBtn);
+        _sRow = CloneStyle(_sBtn);
         _sRow.alignment = TextAnchor.MiddleLeft;
         _sRow.padding = new RectOffset(12, 8, 4, 4);
         Paint(_sRow, ColCard, ColFieldHover, ColMuted);
 
-        _sRowOn = new GUIStyle(_sRow);
+        _sRowOn = CloneStyle(_sRow);
         Paint(_sRowOn, ColAccentDim, ColAccentDim, ColText);
 
-        _sSlider = new GUIStyle(skin.horizontalSlider);
+        _sSlider = CloneStyle(skin.horizontalSlider);
         _sSlider.normal.background = MakeTexture(ColField);
         _sSlider.fixedHeight = 6f;
         _sSlider.border = new RectOffset(0, 0, 0, 0);
 
-        _sThumb = new GUIStyle(skin.horizontalSliderThumb);
+        _sThumb = CloneStyle(skin.horizontalSliderThumb);
         _sThumb.normal.background = MakeTexture(ColAccent);
         _sThumb.hover.background = MakeTexture(new Color(0.35f, 0.72f, 1f, 1f));
         _sThumb.active.background = _sThumb.hover.background;
