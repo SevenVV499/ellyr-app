@@ -179,7 +179,7 @@ namespace EtatJoueurMod
             _fleeCollectEnabled = _config.Bind("Survival", "FleeCollectEnabled", false,
                 "Allow collecting (never combat) while fleeing.");
             _repairPausesActivity = _config.Bind("Survival", "RepairPausesActivity", false,
-                "At RepairPercent, stop all activity (ship stays still) and repair; resume at full HP.");
+                "Repair mode: false = repair during activity, true = stop all activity (ship still) and repair, resume at full HP.");
             _haltInsteadOfFlee = _config.Bind("Survival", "HaltInsteadOfFlee", false,
                 "At FleePercent, stop all activity and stay still (repair only) instead of fleeing.");
             _fleePercent = _config.Bind("Survival", "FleePercent", 60,

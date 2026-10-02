@@ -186,9 +186,23 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
     private void DrawSurvivalControls()
     {
-        bool repair = GUILayout.Toggle(Plugin.RepairEnabled, "Repair (parallel to activity)");
+        // ----- Bloc 1 : Réparation -----
+        GUILayout.BeginVertical(GUI.skin.box);
+        GUILayout.Label("REPAIR");
+        bool repair = GUILayout.Toggle(Plugin.RepairEnabled, "Repair enabled");
         if (repair != Plugin.RepairEnabled)
             Plugin.SetRepairEnabled(repair);
+
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button(Plugin.RepairPausesActivity ? "In activity" : "[In activity]"))
+            Plugin.SetRepairPausesActivity(false);
+        if (GUILayout.Button(Plugin.RepairPausesActivity ? "[Stopped]" : "Stopped"))
+            Plugin.SetRepairPausesActivity(true);
+        GUILayout.EndHorizontal();
+        GUILayout.Label(Plugin.RepairPausesActivity
+            ? "Stopped: all activity paused, ship still, resumes at full HP."
+            : "In activity: repair runs during Navigation / Collect / Combat.");
+
         GUILayout.BeginHorizontal();
         GUILayout.Label("Repair at HP <= " + Plugin.RepairPercent + " %", GUILayout.Width(160f));
         int repairPercent = Mathf.RoundToInt(
@@ -196,22 +210,14 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         GUILayout.EndHorizontal();
         if (repairPercent != Plugin.RepairPercent)
             Plugin.SetRepairPercent(repairPercent);
+        GUILayout.EndVertical();
 
-        bool pause = GUILayout.Toggle(
-            Plugin.RepairPausesActivity, "Repair pauses all activity until HP is full");
-        if (pause != Plugin.RepairPausesActivity)
-            Plugin.SetRepairPausesActivity(pause);
-
-        bool flee = GUILayout.Toggle(Plugin.FleeEnabled, "Low-HP response (abandons current activity)");
+        // ----- Bloc 2 : PV bas (fuite / arrêt d'activité) -----
+        GUILayout.BeginVertical(GUI.skin.box);
+        GUILayout.Label("LOW HP");
+        bool flee = GUILayout.Toggle(Plugin.FleeEnabled, "Low-HP response enabled");
         if (flee != Plugin.FleeEnabled)
             Plugin.SetFleeEnabled(flee);
-        GUILayout.BeginHorizontal();
-        GUILayout.Label("Low-HP response at HP <= " + Plugin.FleePercent + " %", GUILayout.Width(160f));
-        int fleePercent = Mathf.RoundToInt(
-            GUILayout.HorizontalSlider(Plugin.FleePercent, 0f, 100f));
-        GUILayout.EndHorizontal();
-        if (fleePercent != Plugin.FleePercent)
-            Plugin.SetFleePercent(fleePercent);
 
         GUILayout.BeginHorizontal();
         if (GUILayout.Button(Plugin.HaltInsteadOfFlee ? "Flee" : "[Flee]"))
@@ -220,9 +226,19 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             Plugin.SetHaltInsteadOfFlee(true);
         GUILayout.EndHorizontal();
 
-        bool fleeCollect = GUILayout.Toggle(Plugin.FleeCollectEnabled, "Collect while fleeing");
+        GUILayout.BeginHorizontal();
+        GUILayout.Label("Low-HP response at HP <= " + Plugin.FleePercent + " %", GUILayout.Width(160f));
+        int fleePercent = Mathf.RoundToInt(
+            GUILayout.HorizontalSlider(Plugin.FleePercent, 0f, 100f));
+        GUILayout.EndHorizontal();
+        if (fleePercent != Plugin.FleePercent)
+            Plugin.SetFleePercent(fleePercent);
+
+        bool fleeCollect = GUILayout.Toggle(
+            Plugin.FleeCollectEnabled, "Collect while fleeing (Flee mode)");
         if (fleeCollect != Plugin.FleeCollectEnabled)
             Plugin.SetFleeCollectEnabled(fleeCollect);
+        GUILayout.EndVertical();
 
         if (SurvivalWire.IsFleeing)
             GUILayout.Label("State: FLEEING");
