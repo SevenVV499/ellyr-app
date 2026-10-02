@@ -262,6 +262,8 @@ public static class CopperWire
         if (instance == null || !instance.isLocalPlayer)
             return;
 
+        WorldMoveProbe(instance);
+
         long collectSignalRevision = GameState.RevisionSignauxCollecte;
         bool newCollectSignal = collectSignalRevision != _lastCollectSignalRevision;
         long snapshotRevision = GameState.RevisionInstantane;
@@ -1302,6 +1304,48 @@ public static class CopperWire
     // déplacement, puis la commande Sunucugemigezdir(Vector3).
     private static bool _worldMoveLogged;
 
+    // Relevé temporaire (diagnostic carte spéciale) : après chaque ordre par coordonnées du
+    // monde (5 premiers), mesure 2 s plus tard si le navire a bougé et si un chemin existe.
+    private const int WorldMoveProbeMax = 5;
+    private const float WorldMoveProbeDelay = 2f;
+    private static int _worldMoveProbeCount;
+    private static bool _worldMoveProbeActive;
+    private static float _worldMoveProbeAt;
+    private static Vector3 _worldMoveProbeStart;
+    private static Vector3 _worldMoveProbeDestination;
+
+    private static void WorldMoveProbe(Player player)
+    {
+        if (!_worldMoveProbeActive || Time.time < _worldMoveProbeAt)
+            return;
+
+        _worldMoveProbeActive = false;
+        try
+        {
+            Vector3 position = player.transform.position;
+            Plugin.Logger.LogInfo(
+                "[Carte spéciale] +" + WorldMoveProbeDelay.ToString("0.#", CultureInfo.InvariantCulture)
+                + " s : déplacé de "
+                + Vector2.Distance(
+                    new Vector2(_worldMoveProbeStart.x, _worldMoveProbeStart.y),
+                    new Vector2(position.x, position.y)).ToString("0.##", CultureInfo.InvariantCulture)
+                + " | reste "
+                + Vector2.Distance(
+                    new Vector2(_worldMoveProbeDestination.x, _worldMoveProbeDestination.y),
+                    new Vector2(position.x, position.y)).ToString("0.##", CultureInfo.InvariantCulture)
+                + " | hasPath=" + (player.aiLerp != null && player.aiLerp.hasPath)
+                + " | pathPending=" + (player.aiLerp != null && player.aiLerp.pathPending)
+                + " | isStopped=" + (player.aiLerp != null && player.aiLerp.isStopped)
+                + " | vitesse=" + (player.aiLerp == null
+                    ? "?"
+                    : player.aiLerp.speed.ToString("0.##", CultureInfo.InvariantCulture)));
+        }
+        catch (Exception e)
+        {
+            Plugin.Logger.LogError("[Carte spéciale] relevé échoué : " + e);
+        }
+    }
+
     private static bool IssueMoveToCellWorld(Player player, int column, string row, string cell)
     {
         if (cell == _lastMoveCell)
@@ -1344,6 +1388,26 @@ public static class CopperWire
             }
             player.Sunucugemigezdir(destination);
             _lastMoveCell = cell;
+
+            if (_worldMoveProbeCount < WorldMoveProbeMax && !_worldMoveProbeActive)
+            {
+                _worldMoveProbeCount++;
+                _worldMoveProbeActive = true;
+                _worldMoveProbeAt = Time.time + WorldMoveProbeDelay;
+                _worldMoveProbeStart = player.transform.position;
+                _worldMoveProbeDestination = destination;
+                Plugin.Logger.LogInfo(
+                    "[Carte spéciale] ordre " + _worldMoveProbeCount + " | carte " + player.harita
+                    + " | de (" + _worldMoveProbeStart.x.ToString("0.##", CultureInfo.InvariantCulture)
+                    + ", " + _worldMoveProbeStart.y.ToString("0.##", CultureInfo.InvariantCulture)
+                    + ") vers (" + destination.x.ToString("0.##", CultureInfo.InvariantCulture)
+                    + ", " + destination.y.ToString("0.##", CultureInfo.InvariantCulture)
+                    + ") | limites X [" + minX.ToString("0.##", CultureInfo.InvariantCulture)
+                    + " ; " + maxX.ToString("0.##", CultureInfo.InvariantCulture)
+                    + "] Y [" + minY.ToString("0.##", CultureInfo.InvariantCulture)
+                    + " ; " + maxY.ToString("0.##", CultureInfo.InvariantCulture)
+                    + "] | case " + cell);
+            }
             return true;
         }
         catch (Exception e)
