@@ -370,6 +370,15 @@ public static class CopperWire
         bool fleeStarted;
         bool fleeEnded;
         bool fleeing = SurvivalWire.Tick(player, snapshot, out fleeStarted, out fleeEnded);
+        if (fleeing && Plugin.HaltInsteadOfFlee)
+        {
+            // Arrêt d'activité : aucune action, le navire reste sur place.
+            // Seule la réparation (SurvivalWire) travaille.
+            HaltAllActivity(player, snapshot);
+            return;
+        }
+
+        _haltStopIssued = false;
         if (fleeing)
         {
             // La fuite est prioritaire : Combat abandonné et interdit, Collecte
@@ -379,6 +388,7 @@ public static class CopperWire
         }
         else if (fleeEnded)
         {
+            _lastMoveCell = null;
             _nextDecisionAt = 0f;
         }
 
@@ -519,6 +529,31 @@ public static class CopperWire
             _monsterShotTimestampBefore = 0f;
             _monsterShotTimestampCaptured = false;
         }
+    }
+
+    private static bool _haltStopIssued;
+
+    private static void HaltAllActivity(Player player, EtatJeuSnapshot snapshot)
+    {
+        if (_executedAction != null || Brain.HasCurrentAction)
+        {
+            if (_executedAction != null)
+            {
+                CleanupAction(_executedAction, player);
+                _executedAction = null;
+            }
+            Planner.CancelCurrent();
+            _haltStopIssued = false;
+        }
+
+        if (_haltStopIssued)
+            return;
+
+        // Ordre de déplacement vers la case actuelle : annule la destination en cours.
+        Vector3 position = player.transform.position;
+        _lastMoveCell = null;
+        if (IssueMove(player, snapshot.Joueur.Harita, position.x, position.y))
+            _haltStopIssued = true;
     }
 
     // Fuite : le Combat est abandonné (la Collecte aussi, sauf si l'option est

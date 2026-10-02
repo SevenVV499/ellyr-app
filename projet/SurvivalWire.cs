@@ -13,6 +13,10 @@ using UnityEngine;
  *
  * Les deux seuils sont indépendants (Plugin.RepairPercent / Plugin.FleePercent).
  *
+ * Mode « arrêt d'activité » (Plugin.HaltInsteadOfFlee) : au même seuil, au lieu de
+ * fuir, toute activité est arrêtée (pas de Navigation, pas de déplacement) ; seule
+ * la réparation travaille. Même règle de sortie que la fuite.
+ *
  * Sortie de fuite : PV >= seuil réparation ET PV > seuil fuite, c'est-à-dire
  * au-dessus des deux seuils. Pendant la fuite, la réparation est tentée à
  * chaque PV < PV max (si elle est activée) pour que les PV puissent remonter
@@ -36,7 +40,8 @@ public static class SurvivalWire
     private static float _fleeStartedAt;
     private static float _nextRepairAt;
 
-    public static bool IsFleeing { get { return _fleeing; } }
+    public static bool IsFleeing { get { return _fleeing && !Plugin.HaltInsteadOfFlee; } }
+    public static bool IsHalting { get { return _fleeing && Plugin.HaltInsteadOfFlee; } }
 
     public static void Reset()
     {
