@@ -57,11 +57,10 @@ public static class SurvivalWire
 
     /*
      * Évalue la survie sur un snapshot. Renvoie true tant que la fuite est active.
-     * started / ended signalent la transition survenue pendant cet appel.
+     * ended signale la fin de fuite survenue pendant cet appel.
      */
-    public static bool Tick(Player player, EtatJeuSnapshot snapshot, out bool started, out bool ended)
+    public static bool Tick(Player player, EtatJeuSnapshot snapshot, out bool ended)
     {
-        started = false;
         ended = false;
 
         bool wasFleeing = _fleeing;
@@ -87,7 +86,6 @@ public static class SurvivalWire
         UpdateRepairPause(joueur, percent);
         TryRepair(player, joueur, percent);
 
-        started = !wasFleeing && _fleeing;
         ended = wasFleeing && !_fleeing;
         return _fleeing;
     }

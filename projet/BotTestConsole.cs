@@ -66,8 +66,6 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private Vector2 _ammoScroll;
     private bool _openNpcs;
     private bool _openMonsters;
-    private TargetCategory _editingAmmoCategory;
-    private string _editingAmmoName;
 
     // Styles (construits dans OnGUI : GUI.skin n'est accessible que là)
     private bool _stylesReady;
@@ -410,7 +408,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         Row("Catalogue", CollectibleCatalog.IsInitialized
             ? _displayCollectibleTypes.Count + " types"
             : "en attente du joueur local");
-        Hint(CollectionStatusMessage());
+        Hint(CollectionStatusCached());
         EndCard();
 
         BeginCard("Types de collectibles", _enabledCollectibleTypes.Count + " activé(s)");
@@ -593,12 +591,21 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
     // ------------------------------------------------------------------ Styles
 
+    // Une texture 1x1 par couleur, partagée entre tous les styles.
+    private static readonly Dictionary<Color, Texture2D> TextureCache =
+        new Dictionary<Color, Texture2D>();
+
     private static Texture2D MakeTexture(Color color)
     {
-        Texture2D texture = new Texture2D(1, 1);
+        Texture2D texture;
+        if (TextureCache.TryGetValue(color, out texture) && texture != null)
+            return texture;
+
+        texture = new Texture2D(1, 1);
         texture.SetPixel(0, 0, color);
         texture.Apply();
         texture.hideFlags = HideFlags.HideAndDontSave;
+        TextureCache[color] = texture;
         return texture;
     }
 
@@ -769,6 +776,22 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
     // ------------------------------------------------------------------ Collecte
 
+    // OnGUI s'exécute plusieurs fois par image : ce message parcourt tous les
+    // collectibles, il n'est donc recalculé que 4 fois par seconde.
+    private string _collectStatusCache = string.Empty;
+    private float _collectStatusAt = -1f;
+
+    private string CollectionStatusCached()
+    {
+        float now = Time.unscaledTime;
+        if (now - _collectStatusAt >= 0.25f || _collectStatusAt < 0f)
+        {
+            _collectStatusCache = CollectionStatusMessage();
+            _collectStatusAt = now;
+        }
+        return _collectStatusCache;
+    }
+
     [HideFromIl2Cpp]
     private string CollectionStatusMessage()
     {
@@ -935,8 +958,6 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
                     else
                     {
                         _editingAmmoTarget = targetKey;
-                        _editingAmmoCategory = category;
-                        _editingAmmoName = name;
                         _ammoScroll = Vector2.zero;
                     }
                 }
@@ -1118,6 +1139,5 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private void CloseAmmoEditor()
     {
         _editingAmmoTarget = null;
-        _editingAmmoName = null;
     }
 }

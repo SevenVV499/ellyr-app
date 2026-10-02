@@ -6,33 +6,6 @@ using Il2CppInterop.Runtime;
 using Mirror;
 using UnityEngine;
 
-
-
-public sealed class NpcCombatDebugInfo
-{
-    public string NpcName;
-    public uint NetId;
-    public float NpcRange;
-    public float OwnRange;
-    public bool LongRange;
-    public bool OutOfReachMode;
-    public string Decision;
-    public float ZoneMinimum;
-    public float AimDistance;
-    public float Distance;
-    public string Status;
-    public string Movement;
-    public bool ShotConfirmed;
-    public float PlayerX;
-    public float PlayerY;
-    public float NpcX;
-    public float NpcY;
-    public float PlayerSpeed;       
-    public float NpcSpeed;          
-    public float PlayerSpeedStat;   
-    public float UpdatedAt;
-}
-
 public static class CopperWire
 {
     private const float DecisionIntervalSeconds = 0.5f;
@@ -68,8 +41,6 @@ public static class CopperWire
     private static float _npcFollowSampleTime;
     private static Vector2 _npcFollowVelocity;
     private static bool _hasNpcFollowVelocity;
-    private static Vector2 _playerFollowSamplePosition;
-    private static Vector2 _playerFollowVelocity;
     private static float _npcFollowNextOrderAt;
 
     
@@ -222,8 +193,6 @@ public static class CopperWire
     }
 
     
-    public static NpcCombatDebugInfo LastNpcCombat { get { return _lastNpcCombat; } }
-    private static NpcCombatDebugInfo _lastNpcCombat;
 
     public static void SetAutomationEnabled(bool enabled)
     {
@@ -284,77 +253,10 @@ public static class CopperWire
             allowCollectible);
     }
 
-    // ----- Diagnostic arrière-plan (fenêtre non active / réduite) -----
-    // Journalise, seulement hors focus, ce qui permet de comprendre pourquoi la
-    // collecte et le combat ne s'exécutent pas : cadence réelle de Update, âge du
-    // snapshot, décisions du planificateur et résultats des exécuteurs.
-
-    private const float BackgroundHeartbeatSeconds = 5f;
-    private static float _bgNextHeartbeatAt;
-    private static float _bgLastHeartbeatReal;
-    private static int _bgLastHeartbeatFrame;
-    private static bool _bgWasFocused = true;
-
-    private static void BackgroundHeartbeat(Player player)
-    {
-        bool focused = Application.isFocused;
-        float real = Time.realtimeSinceStartup;
-        if (focused != _bgWasFocused)
-        {
-            _bgWasFocused = focused;
-            _bgNextHeartbeatAt = 0f;
-            Plugin.Logger.LogInfo("[Fond] Fenêtre " + (focused ? "active" : "NON active")
-                + " | automatisation=" + _automationEnabled
-                + " | targetFrameRate=" + Application.targetFrameRate
-                + " | runInBackground=" + Application.runInBackground
-                + " | timeScale=" + Time.timeScale);
-        }
-
-        if (focused || real < _bgNextHeartbeatAt)
-            return;
-
-        float elapsed = real - _bgLastHeartbeatReal;
-        int frames = Time.frameCount - _bgLastHeartbeatFrame;
-        _bgLastHeartbeatReal = real;
-        _bgLastHeartbeatFrame = Time.frameCount;
-        _bgNextHeartbeatAt = real + BackgroundHeartbeatSeconds;
-
-        EtatJeuSnapshot snapshot = GameState.ObtenirSnapshot();
-        string age = snapshot == null || snapshot.Timestamp == default(DateTime)
-            ? "aucun"
-            : (DateTime.UtcNow - snapshot.Timestamp).TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture) + " s";
-        BehaviorAction action = Brain.CurrentAction;
-        Plugin.Logger.LogInfo("[Fond] images/s=" + (elapsed > 0f ? (frames / elapsed).ToString("0.0", CultureInfo.InvariantCulture) : "?")
-            + " | dt=" + Time.deltaTime.ToString("0.000", CultureInfo.InvariantCulture)
-            + " | âge snapshot=" + age
-            + " | action=" + (action == null ? "aucune" : action.Type + "/" + action.State)
-            + " | saldiridurumu=" + player.saldiridurumu
-            + " | collectibles=" + (snapshot == null || snapshot.Collectibles == null ? 0 : snapshot.Collectibles.Count)
-            + " | PNJ=" + (snapshot == null || snapshot.Pnjs == null ? 0 : snapshot.Pnjs.Count));
-    }
-
-    private static string _failReason = string.Empty;
-
-    // Numéro de sortie en échec (par fonction) : permet de lire dans le journal
-    // laquelle des conditions a fait échouer l'action.
-    private static ExecutionResult Fail(string reason)
-    {
-        _failReason = reason;
-        return ExecutionResult.Failed;
-    }
-
-    private static void BackgroundLog(string message)
-    {
-        if (!Application.isFocused)
-            Plugin.Logger.LogInfo("[Fond] " + message);
-    }
-
     internal static void OnPlayerUpdate(Player instance)
     {
         if (instance == null || !instance.isLocalPlayer)
             return;
-
-        BackgroundHeartbeat(instance);
 
         long collectSignalRevision = GameState.RevisionSignauxCollecte;
         bool newCollectSignal = collectSignalRevision != _lastCollectSignalRevision;
@@ -434,9 +336,8 @@ public static class CopperWire
         _actionMapId = snapshot.Joueur.Harita;
         _hasActionMap = true;
 
-        bool fleeStarted;
         bool fleeEnded;
-        bool fleeing = SurvivalWire.Tick(player, snapshot, out fleeStarted, out fleeEnded);
+        bool fleeing = SurvivalWire.Tick(player, snapshot, out fleeEnded);
         // Arrêt total (navire immobile) : pause de réparation « Stopped » quand la
         // fuite n'est pas active. Seule la réparation travaille.
         if (!fleeing && SurvivalWire.IsRepairPaused)
@@ -505,7 +406,6 @@ public static class CopperWire
 
         if (action != _executedAction)
         {
-            BackgroundLog("Décision : " + (action == null ? "aucune" : action.Type.ToString()));
             CleanupAction(_executedAction, player);
             _executedAction = null;
             if (action == null)
@@ -535,12 +435,6 @@ public static class CopperWire
 
         if (result == ExecutionResult.Running)
             return;
-
-        BackgroundLog("Action " + selected + " terminée avec le résultat " + result
-            + (result == ExecutionResult.Failed ? " (" + _failReason + ")" : string.Empty)
-            + " | saldiridurumu=" + player.saldiridurumu
-            + " | aiLerp.reachedDestination=" + (player.aiLerp != null && player.aiLerp.reachedDestination)
-            + " | pathPending=" + (player.aiLerp != null && player.aiLerp.pathPending));
 
         if (result == ExecutionResult.Completed)
             Planner.CompleteCurrent();
@@ -683,7 +577,7 @@ public static class CopperWire
     {
         CollectActionContext context = Brain.GetCurrentContext<CollectActionContext>();
         if (context == null || context.NetId == 0)
-            return Fail("collecte #1");
+            return ExecutionResult.Failed;
 
         NetworkIdentity identity = ResolveNetworkIdentity(context.NetId);
         if (identity == null)
@@ -692,11 +586,11 @@ public static class CopperWire
                 : ExecutionResult.Failed;
 
         if (identity.netId != context.NetId)
-            return Fail("collecte #2");
+            return ExecutionResult.Failed;
 
         if (!IssueCollectMove(player, context.NetId, identity))
         {
-            return Fail("collecte #3");
+            return ExecutionResult.Failed;
         }
 
         TrackPlayerProgress(player);
@@ -716,7 +610,7 @@ public static class CopperWire
             return ExecutionResult.Running;
 
         if (Time.time - _lastProgressAt >= NavigationStuckSeconds)
-            return Fail("collecte #4");
+            return ExecutionResult.Failed;
         return ExecutionResult.Running;
     }
 
@@ -908,29 +802,29 @@ public static class CopperWire
         BehaviorAction action = Brain.CurrentAction;
         CombatActionContext context = Brain.GetCurrentContext<CombatActionContext>();
         if (context == null || context.Target == null)
-            return Fail("combat #1");
+            return ExecutionResult.Failed;
 
         CombatTargetEvaluation targetEvaluation = EvaluateCombatTarget(action, snapshot);
         if (targetEvaluation == CombatTargetEvaluation.Completed)
             return ExecutionResult.Completed;
         if (targetEvaluation == CombatTargetEvaluation.Invalidated)
-            return Fail("combat #2");
+            return ExecutionResult.Failed;
 
         GameObject target = ResolveCombatTarget(context.Target);
         if (target == null)
-            return Fail("combat #3");
+            return ExecutionResult.Failed;
 
         Vector2 targetPosition;
         if (!TryGetCombatTargetPosition(context.Target, target, out targetPosition))
-            return Fail("combat #4");
+            return ExecutionResult.Failed;
 
         if (context.Target.WeaponCategory == TargetCategory.Monster)
             return ExecuteMonsterCombat(player, snapshot, context.Target, target, targetPosition);
 
         if (!EnsureCombatTarget(player, target))
-            return Fail("combat #5");
+            return ExecutionResult.Failed;
         if (managerAttackUnavailable(player, target))
-            return Fail("combat #6");
+            return ExecutionResult.Failed;
         ApplyCombatAmmo(player, context.Target);
 
         if (context.Target.WeaponCategory == TargetCategory.Npc)
@@ -942,7 +836,7 @@ public static class CopperWire
             targetPosition);
         float ownRange = snapshot.Joueur.Portee;
         if (!IsFinitePositive(ownRange))
-            return Fail("combat #7");
+            return ExecutionResult.Failed;
 
         float minimumDistance = MinimumCombatDistance;
         float maximumDistance = ownRange;
@@ -973,16 +867,16 @@ public static class CopperWire
         float destinationX = targetPosition.x + direction.x * desiredDistance;
         float destinationY = targetPosition.y + direction.y * desiredDistance;
         if (!IssueMove(player, snapshot.Joueur.Harita, destinationX, destinationY))
-            return Fail("combat #8");
+            return ExecutionResult.Failed;
 
         if (distance < _lastTargetDistance - MovementProgressThreshold)
             _lastProgressAt = Time.time;
         _lastTargetDistance = distance;
 
         if (HasNoUsablePath(player) && Time.time - _actionStartedAt >= CombatStuckSeconds)
-            return Fail("combat #9");
+            return ExecutionResult.Failed;
         if (Time.time - _lastProgressAt >= CombatStuckSeconds)
-            return Fail("combat #10");
+            return ExecutionResult.Failed;
         return ExecutionResult.Running;
     }
 
@@ -997,7 +891,7 @@ public static class CopperWire
         float distance = Vector2.Distance(playerPosition2D, targetPosition);
         float ownRange = snapshot.Joueur.Portee;
         if (!IsFinitePositive(ownRange))
-            return Fail("combat NPC #1");
+            return ExecutionResult.Failed;
 
         
 
@@ -1024,10 +918,6 @@ public static class CopperWire
             ? distance >= ringMinimum && insideCannonRange
             : insideCannonRange;
 
-        RecordNpcCombatDebug(combatTarget, rangeMode, moveMode, waitingFirstShot,
-            ownRange, ringMinimum, distance, inDesiredRangeBand, playerPosition2D, targetPosition,
-            snapshot.Joueur.Vitesse);
-
         if (inDesiredRangeBand)
         {
             _lastTargetDistance = distance;
@@ -1038,7 +928,7 @@ public static class CopperWire
             }
 
             if (Time.time - _lastProgressAt >= CombatStuckSeconds)
-                return Fail("combat NPC #2");
+                return ExecutionResult.Failed;
             return ExecutionResult.Running;
         }
 
@@ -1061,7 +951,7 @@ public static class CopperWire
         float destinationY = targetPosition.y + (useApproachPoint ? combatTarget.ApproachOffsetY : 0f);
 
         if (!IssueMove(player, snapshot.Joueur.Harita, destinationX, destinationY))
-            return Fail("combat NPC #3");
+            return ExecutionResult.Failed;
 
         return CheckNpcCombatProgress(player, distance);
     }
@@ -1095,7 +985,7 @@ public static class CopperWire
             if (_monsterAmmoWaitSince < 0f)
                 _monsterAmmoWaitSince = Time.time;
             if (Time.time - _monsterAmmoWaitSince >= CombatStuckSeconds)
-                return Fail("combat monstre #1");
+                return ExecutionResult.Failed;
             return ExecutionResult.Running;
         }
 
@@ -1103,7 +993,7 @@ public static class CopperWire
 
         GameManager manager = GameManager.gm;
         if (manager == null)
-            return Fail("combat monstre #2");
+            return ExecutionResult.Failed;
 
         if (!_monsterShotTimestampCaptured)
         {
@@ -1130,13 +1020,13 @@ public static class CopperWire
                 catch (Exception e)
                 {
                     Plugin.Logger.LogError("[CopperWire] Erreur démarrage combat Monster : " + e);
-                    return Fail("combat monstre #3");
+                    return ExecutionResult.Failed;
                 }
             }
         }
 
         if (managerAttackUnavailable(player, target))
-            return Fail("combat monstre #4");
+            return ExecutionResult.Failed;
 
         if (snapshot.Joueur.DernierTirHarpon > _monsterShotTimestampBefore)
         {
@@ -1144,13 +1034,13 @@ public static class CopperWire
         }
 
         if (!IssueMove(player, snapshot.Joueur.Harita, targetPosition.x, targetPosition.y))
-            return Fail("combat monstre #5");
+            return ExecutionResult.Failed;
 
         TrackPlayerProgress(player);
         if (HasNoUsablePath(player) && Time.time - _actionStartedAt >= CombatStuckSeconds)
-            return Fail("combat monstre #6");
+            return ExecutionResult.Failed;
         if (Time.time - _lastProgressAt >= CombatStuckSeconds)
-            return Fail("combat monstre #7");
+            return ExecutionResult.Failed;
 
         return ExecutionResult.Running;
     }
@@ -1223,15 +1113,10 @@ public static class CopperWire
         if (Application.isFocused)
             return;
 
-        BackgroundLog("Saldir() n'a pas engagé l'attaque (hedefgemi==cible : "
-            + (manager.hedefgemi == target) + ", saldiridurumu : " + player.saldiridurumu
-            + ") : repli Player.Saldir(true).");
         try
         {
             manager.hedefgemi = target;
             player.Saldir(true);
-            BackgroundLog("Après repli : hedefgemi==cible : " + (manager.hedefgemi == target)
-                + " | saldiridurumu : " + player.saldiridurumu);
         }
         catch (Exception e)
         {
@@ -1255,10 +1140,6 @@ public static class CopperWire
             _lastAttackCallAt = Time.time;
             _ownedCombatTarget = target;
             _ownsCombat = true;
-            BackgroundLog("Saldir() appelé sur " + target.name
-                + " | hedefgemi==cible : " + (manager.hedefgemi == target)
-                + " | isaretliGemi==cible : " + (manager.isaretliGemi == target)
-                + " | saldiridurumu : " + player.saldiridurumu);
             return true;
         }
         catch (Exception e)
@@ -1283,14 +1164,7 @@ public static class CopperWire
 
         if (_combatNoAttackSince < 0f)
             _combatNoAttackSince = Time.time;
-        bool unavailable = Time.time - _combatNoAttackSince >= CombatStuckSeconds;
-        if (unavailable)
-        {
-            _failReason = "attaque jamais engagée (" + CombatStuckSeconds + " s) | hedefgemi==cible : "
-                + (manager.hedefgemi == target) + " | hedefgemi null : " + (manager.hedefgemi == null)
-                + " | saldiridurumu : " + player.saldiridurumu;
-        }
-        return unavailable;
+        return Time.time - _combatNoAttackSince >= CombatStuckSeconds;
     }
 
     private static void StopCombatForOwnedTarget()
@@ -1508,11 +1382,6 @@ public static class CopperWire
 
     
 
-
-
-
-
-
     private static void ReactToNpcCannonShot(Player player)
     {
         if (_liveCannonShotSequence <= _npcCannonShotSequenceBefore)
@@ -1541,12 +1410,6 @@ public static class CopperWire
     }
 
     
-
-
-
-
-
-
 
     private static void StopApproachWhileReloading(Player player)
     {
@@ -1591,9 +1454,6 @@ public static class CopperWire
             + distance.ToString("0.##", CultureInfo.InvariantCulture)
             + "), canon en rechargement -> arrêt, puis maintien hors de sa portée.");
         StopShipHere(player, target);
-        if (_lastNpcCombat != null)
-            _lastNpcCombat.Movement = "à portée, canon en rechargement : "
-                + _lastNpcCombat.Movement.Replace("premier tir parti : ", string.Empty);
     }
 
     private static bool IsCannonReloaded(Player player)
@@ -1640,23 +1500,13 @@ public static class CopperWire
                 1f, out column, out row, out chosenDistance))
         {
             IssueMoveToCell(player, column, row);
-            if (_lastNpcCombat != null)
-                _lastNpcCombat.Movement = "premier tir parti : arrêt (case à "
-                    + chosenDistance.ToString("0.##", CultureInfo.InvariantCulture) + ")";
             return;
         }
 
         IssueMove(player, _actionMapId, position.x, position.y);
-        if (_lastNpcCombat != null)
-            _lastNpcCombat.Movement = "premier tir parti : arrêt sur place";
     }
 
     
-
-
-
-
-
 
     private static bool TryChooseNpcBandCell(
         int mapId,
@@ -1802,99 +1652,7 @@ public static class CopperWire
         }
     }
 
-    private static void RecordNpcCombatDebug(
-        CombatTarget target,
-        NpcRangeMode mode,
-        NpcRangeMode moveMode,
-        bool waitingFirstShot,
-        float ownRange,
-        float zoneMinimum,
-        float distance,
-        bool inDesiredRangeBand,
-        Vector2 playerPosition,
-        Vector2 targetPosition,
-        float playerSpeedStat)
-    {
-        bool outOfReach = mode == NpcRangeMode.StayOutOfReach;
-        float aimDistance = outOfReach ? target.AimDistance : 0f;
-        string aim = aimDistance.ToString("0.##", CultureInfo.InvariantCulture);
-
-        string status;
-        string movement;
-        if (moveMode == NpcRangeMode.StayOutOfReach)
-        {
-            if (distance < zoneMinimum)
-            {
-                status = "trop près : dans sa portée";
-                movement = "recule à " + aim;
-            }
-            else if (distance > ownRange)
-            {
-                status = "trop loin : hors de ma portée";
-                movement = "avance à " + aim;
-            }
-            else
-            {
-                status = "dans la zone";
-                movement = "aucun ordre";
-            }
-        }
-        else if (distance > ownRange)
-        {
-            status = "trop loin : hors de ma portée";
-            movement = mode == NpcRangeMode.Normal && target != null && target.HasApproachPoint
-                ? "avance vers le point tiré au sort"
-                : "avance vers le NPC";
-        }
-        else
-        {
-            status = "à portée";
-            movement = "aucun ordre";
-        }
-
-        if (inDesiredRangeBand)
-            movement = "aucun ordre";
-        if (waitingFirstShot)
-            movement += " (fonce, attend le premier tir)";
-
-        _lastNpcCombat = new NpcCombatDebugInfo
-        {
-            NpcName = target == null ? "?" : target.Name,
-            NetId = target == null ? 0u : target.NetId,
-            NpcRange = target == null ? float.NaN : target.Portee,
-            OwnRange = ownRange,
-            LongRange = Planner.LongRange,
-            OutOfReachMode = outOfReach,
-            Decision = target == null || target.PlacementReason == null
-                ? "?"
-                : target.PlacementReason,
-            ZoneMinimum = zoneMinimum,
-            AimDistance = aimDistance,
-            Distance = distance,
-            Status = status,
-            Movement = movement,
-            ShotConfirmed = _npcCannonShotConfirmed,
-            PlayerX = playerPosition.x,
-            PlayerY = playerPosition.y,
-            NpcX = targetPosition.x,
-            NpcY = targetPosition.y,
-            PlayerSpeed = _hasNpcFollowVelocity ? _playerFollowVelocity.magnitude : float.NaN,
-            NpcSpeed = _hasNpcFollowVelocity ? _npcFollowVelocity.magnitude : float.NaN,
-            PlayerSpeedStat = playerSpeedStat,
-            UpdatedAt = Time.time
-        };
-    }
-
     
-
-
-
-
-
-
-
-
-
 
     private static void FollowNpcContinuously(
         Player player,
@@ -1907,10 +1665,8 @@ public static class CopperWire
         {
             _npcContinuousFollowKey = targetKey;
             _npcFollowSamplePosition = targetPosition;
-            _playerFollowSamplePosition = playerPosition;
             _npcFollowSampleTime = now;
             _npcFollowVelocity = Vector2.zero;
-            _playerFollowVelocity = Vector2.zero;
             _hasNpcFollowVelocity = false;
             _npcFollowNextOrderAt = 0f;
             return;
@@ -1920,16 +1676,11 @@ public static class CopperWire
         if (elapsed >= NpcFollowSampleInterval)
         {
             Vector2 measured = (targetPosition - _npcFollowSamplePosition) / elapsed;
-            Vector2 measuredPlayer = (playerPosition - _playerFollowSamplePosition) / elapsed;
             _npcFollowVelocity = _hasNpcFollowVelocity
                 ? Vector2.Lerp(_npcFollowVelocity, measured, 0.5f)
                 : measured;
-            _playerFollowVelocity = _hasNpcFollowVelocity
-                ? Vector2.Lerp(_playerFollowVelocity, measuredPlayer, 0.5f)
-                : measuredPlayer;
             _hasNpcFollowVelocity = true;
             _npcFollowSamplePosition = targetPosition;
-            _playerFollowSamplePosition = playerPosition;
             _npcFollowSampleTime = now;
         }
 
@@ -1973,12 +1724,6 @@ public static class CopperWire
     }
 
     
-
-
-
-
-
-
 
     private static void HoldNpcBand(
         Player player,
@@ -2035,9 +1780,6 @@ public static class CopperWire
             return;
 
         _npcBandNextOrderAt = Time.time + NpcBandOrderInterval;
-        if (_lastNpcCombat != null)
-            _lastNpcCombat.Movement = (tooClose ? "trop près : recule" : "trop loin : revient")
-                + " (" + detail + ", réaction immédiate)";
     }
 
     private static void ClearNpcFollowTracking()
@@ -2237,9 +1979,6 @@ public static class CopperWire
     }
 
     
-
-
-
 
     private static void CheckNavigationArrival(Player player)
     {
