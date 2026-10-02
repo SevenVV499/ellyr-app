@@ -1560,25 +1560,49 @@ namespace EtatJoueurMod
             }
         }
 
+        // Carte 41 (Isik Tilsimi) : le jeu (GrupUyesiUI.KoordinatGetir) reprend les limites
+        // de la carte 13 (index 12 des tableaux) décalées d'une largeur de carte vers la
+        // gauche sur X, sans changer Y. Les autres cartes sont indexées par numéro - 1.
+        private const int CarteDecalee = 41;
+        private const int IndexCarteReference = 12;
+
+        private static bool TryLimitesCarte(
+            int harita, out float minX, out float maxX, out float minY, out float maxY)
+        {
+            minX = maxX = minY = maxY = 0f;
+
+            int index = harita == CarteDecalee ? IndexCarteReference : harita - 1;
+            if (index < 0
+                || index >= _minX.Length
+                || index >= _maxX.Length
+                || index >= _minY.Length
+                || index >= _maxY.Length)
+                return false;
+
+            minX = _minX[index];
+            maxX = _maxX[index];
+            minY = _minY[index];
+            maxY = _maxY[index];
+
+            if (harita == CarteDecalee)
+            {
+                float largeur = maxX - minX;
+                minX -= largeur;
+                maxX -= largeur;
+            }
+            return true;
+        }
+
         public static string Convertir(int harita, float x, float y)
         {
             if (!ChargerTableauxDuJeu())
                 return null;
 
-            int index = harita - 1;
-            if (index < 0
-                || index >= _minX.Length
-                || index >= _maxX.Length
-                || index >= _minY.Length
-                || index >= _maxY.Length
+            float minX, maxX, minY, maxY;
+            if (!TryLimitesCarte(harita, out minX, out maxX, out minY, out maxY)
                 || _lettres == null
                 || _lettres.Length == 0)
                 return null;
-
-            float minX = _minX[index];
-            float maxX = _maxX[index];
-            float minY = _minY[index];
-            float maxY = _maxY[index];
             if (maxX <= minX || maxY <= minY)
                 return null;
 
@@ -1601,19 +1625,7 @@ namespace EtatJoueurMod
 
             if (!ChargerTableauxDuJeu()) return false;
 
-            int index = harita - 1;
-            if (index < 0
-                || index >= _minX.Length
-                || index >= _maxX.Length
-                || index >= _minY.Length
-                || index >= _maxY.Length)
-                return false;
-
-            minX = _minX[index];
-            maxX = _maxX[index];
-            minY = _minY[index];
-            maxY = _maxY[index];
-            return true;
+            return TryLimitesCarte(harita, out minX, out maxX, out minY, out maxY);
         }
 
         /*
@@ -1635,6 +1647,20 @@ namespace EtatJoueurMod
 
             derniereLigne = _lettres.Length - 1;
             return true;
+        }
+
+        // Index de la ligne portant cette lettre dans la grille (-1 si inconnue).
+        public static int IndexLigne(string lettre)
+        {
+            if (string.IsNullOrEmpty(lettre) || !ChargerTableauxDuJeu() || _lettres == null)
+                return -1;
+
+            for (int i = 0; i < _lettres.Length; i++)
+            {
+                if (string.Equals(_lettres[i], lettre, StringComparison.Ordinal))
+                    return i;
+            }
+            return -1;
         }
 
         // Lettre de la ligne donnée de la grille (null si hors limites).

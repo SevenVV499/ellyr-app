@@ -1296,9 +1296,70 @@ public static class CopperWire
     }
 
     
+    // Carte 41 (Isik Tilsimi) : Player.HedefeGit sort avant de donner l'ordre (ses tables
+    // natives n'ont pas cette carte). On reproduit ce qu'il fait sur les autres cartes
+    // à partir de coordonnées du monde : destination locale du déplacement, puis la
+    // commande Sunucugemigezdir(Vector3).
+    private const int WorldMoveMapId = 41;
+    private static bool _worldMoveLogged;
+
+    private static bool IssueMoveToCellWorld(Player player, int column, string row, string cell)
+    {
+        if (cell == _lastMoveCell)
+        {
+            if (player.aiLerp != null)
+                player.aiLerp.isStopped = false;
+            return true;
+        }
+
+        float minX, maxX, minY, maxY;
+        int lastColumn, lastLine;
+        int line = PositionReelle.IndexLigne(row);
+        if (line < 0
+            || !PositionReelle.ObtenirGrille(
+                WorldMoveMapId, out minX, out maxX, out minY, out maxY, out lastColumn, out lastLine)
+            || lastColumn <= 0
+            || lastLine <= 0)
+            return false;
+
+        Vector3 destination = new Vector3(
+            minX + column * (maxX - minX) / lastColumn,
+            minY + line * (maxY - minY) / lastLine,
+            player.transform.position.z);
+
+        try
+        {
+            if (!_worldMoveLogged)
+            {
+                _worldMoveLogged = true;
+                Plugin.Logger.LogInfo(
+                    "[CopperWire] Carte " + WorldMoveMapId
+                    + " : déplacement par coordonnées du monde (HedefeGit ne gère pas cette carte).");
+            }
+
+            if (player.aiLerp != null)
+            {
+                player.aiLerp.isStopped = false;
+                player.aiLerp.destination = destination;
+                player.aiLerp.SearchPath();
+            }
+            player.Sunucugemigezdir(destination);
+            _lastMoveCell = cell;
+            return true;
+        }
+        catch (Exception e)
+        {
+            Plugin.Logger.LogError("[CopperWire] Déplacement par coordonnées du monde échoué : " + e);
+            return false;
+        }
+    }
+
     private static bool IssueMoveToCell(Player player, int column, string row)
     {
         string cell = column.ToString(CultureInfo.InvariantCulture) + "|" + row;
+        if (player.harita == WorldMoveMapId)
+            return IssueMoveToCellWorld(player, column, row, cell);
+
         if (cell == _lastMoveCell)
         {
             if (player.aiLerp != null)
