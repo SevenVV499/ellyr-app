@@ -1560,18 +1560,37 @@ namespace EtatJoueurMod
             }
         }
 
-        // Carte 41 (Isik Tilsimi) : le jeu (GrupUyesiUI.KoordinatGetir) reprend les limites
-        // de la carte 13 (index 12 des tableaux) décalées d'une largeur de carte vers la
-        // gauche sur X, sans changer Y. Les autres cartes sont indexées par numéro - 1.
-        private const int CarteDecalee = 41;
-        private const int IndexCarteReference = 12;
+        // Cartes spéciales 41 à 46 (dont Isik Tilsimi, 41) : GrupUyesiUI.KoordinatGetir
+        // reprend les limites d'une carte de référence (13 ou 14, index 12 ou 13 des
+        // tableaux) et décale X vers la gauche d'un nombre entier de largeurs de carte,
+        // sans changer Y. Les autres cartes sont indexées par numéro - 1.
+        //   carte :        41  42  43  44  45  46
+        //   référence :    13  14  13  14  13  14
+        //   largeurs :      1   0   2   3   4   5
+        private const int PremiereCarteSpeciale = 41;
+        private static readonly int[] IndexReferenceSpeciale = { 12, 13, 12, 13, 12, 13 };
+        private static readonly int[] LargeursDecalageSpeciale = { 1, 0, 2, 3, 4, 5 };
+
+        public static bool EstCarteSpeciale(int harita)
+        {
+            int i = harita - PremiereCarteSpeciale;
+            return i >= 0 && i < IndexReferenceSpeciale.Length;
+        }
 
         private static bool TryLimitesCarte(
             int harita, out float minX, out float maxX, out float minY, out float maxY)
         {
             minX = maxX = minY = maxY = 0f;
 
-            int index = harita == CarteDecalee ? IndexCarteReference : harita - 1;
+            int index = harita - 1;
+            int largeursDecalage = 0;
+            if (EstCarteSpeciale(harita))
+            {
+                int i = harita - PremiereCarteSpeciale;
+                index = IndexReferenceSpeciale[i];
+                largeursDecalage = LargeursDecalageSpeciale[i];
+            }
+
             if (index < 0
                 || index >= _minX.Length
                 || index >= _maxX.Length
@@ -1584,11 +1603,11 @@ namespace EtatJoueurMod
             minY = _minY[index];
             maxY = _maxY[index];
 
-            if (harita == CarteDecalee)
+            if (largeursDecalage != 0)
             {
-                float largeur = maxX - minX;
-                minX -= largeur;
-                maxX -= largeur;
+                float decalage = (maxX - minX) * largeursDecalage;
+                minX -= decalage;
+                maxX -= decalage;
             }
             return true;
         }

@@ -1296,11 +1296,10 @@ public static class CopperWire
     }
 
     
-    // Carte 41 (Isik Tilsimi) : Player.HedefeGit sort avant de donner l'ordre (ses tables
-    // natives n'ont pas cette carte). On reproduit ce qu'il fait sur les autres cartes
-    // à partir de coordonnées du monde : destination locale du déplacement, puis la
-    // commande Sunucugemigezdir(Vector3).
-    private const int WorldMoveMapId = 41;
+    // Cartes spéciales 41 à 46 (dont Isik Tilsimi, 41) : Player.HedefeGit sort avant de
+    // donner l'ordre (ses tables natives n'ont pas ces cartes). On reproduit ce qu'il fait
+    // sur les autres cartes à partir de coordonnées du monde : destination locale du
+    // déplacement, puis la commande Sunucugemigezdir(Vector3).
     private static bool _worldMoveLogged;
 
     private static bool IssueMoveToCellWorld(Player player, int column, string row, string cell)
@@ -1317,7 +1316,7 @@ public static class CopperWire
         int line = PositionReelle.IndexLigne(row);
         if (line < 0
             || !PositionReelle.ObtenirGrille(
-                WorldMoveMapId, out minX, out maxX, out minY, out maxY, out lastColumn, out lastLine)
+                player.harita, out minX, out maxX, out minY, out maxY, out lastColumn, out lastLine)
             || lastColumn <= 0
             || lastLine <= 0)
             return false;
@@ -1333,7 +1332,7 @@ public static class CopperWire
             {
                 _worldMoveLogged = true;
                 Plugin.Logger.LogInfo(
-                    "[CopperWire] Carte " + WorldMoveMapId
+                    "[CopperWire] Carte " + player.harita
                     + " : déplacement par coordonnées du monde (HedefeGit ne gère pas cette carte).");
             }
 
@@ -1357,7 +1356,7 @@ public static class CopperWire
     private static bool IssueMoveToCell(Player player, int column, string row)
     {
         string cell = column.ToString(CultureInfo.InvariantCulture) + "|" + row;
-        if (player.harita == WorldMoveMapId)
+        if (PositionReelle.EstCarteSpeciale(player.harita))
             return IssueMoveToCellWorld(player, column, row, cell);
 
         if (cell == _lastMoveCell)
