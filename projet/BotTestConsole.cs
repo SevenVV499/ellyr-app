@@ -17,7 +17,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private const int TabCollect = 3;
     private const int TabStatus = 4;
     private static readonly string[] TabLabels =
-        { "Control", "Survival", "Targets", "Collect", "Status" };
+        { "Contrôle", "Survie", "Cibles", "Collecte", "État" };
 
     private const float HeaderHeight = 44f;
     private const float TabBarHeight = 34f;
@@ -63,6 +63,9 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private List<string> _displayCollectibleTypes = new List<string>();
     private CombatCollectPriority _priority = CombatCollectPriority.Collect;
     private string _editingAmmoTarget;
+    private Vector2 _ammoScroll;
+    private bool _openNpcs;
+    private bool _openMonsters;
     private TargetCategory _editingAmmoCategory;
     private string _editingAmmoName;
 
@@ -91,6 +94,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private GUIStyle _sSlider;
     private GUIStyle _sThumb;
     private GUIStyle _sPill;
+    private GUIStyle _sFold;
 
     public BotTestConsoleBehaviour(IntPtr ptr) : base(ptr)
     {
@@ -147,7 +151,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
         GUI.Label(
             new Rect(_panel.x + 16f, _panel.yMax - FooterHeight - 2f, _panel.width - 32f, FooterHeight),
-            "F8 hide / show   |   drag the header to move",
+            "F8 afficher / masquer   |   glisser l'en-tête pour déplacer",
             _sMuted);
     }
 
@@ -177,11 +181,11 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private void DrawHeader()
     {
         GUI.Box(new Rect(_panel.x, _panel.y, _panel.width, HeaderHeight), GUIContent.none, _sHeader);
-        GUI.Label(new Rect(_panel.x + 16f, _panel.y + 10f, 220f, 24f), "ELLYR BOT CONSOLE", _sTitle);
+        GUI.Label(new Rect(_panel.x + 16f, _panel.y + 10f, 220f, 24f), "CONSOLE BOT ELLYR", _sTitle);
 
         bool running = CopperWire.AutomationEnabled;
         Rect play = new Rect(_panel.xMax - 108f, _panel.y + 8f, 92f, 28f);
-        if (GUI.Button(play, running ? "STOP" : "PLAY", running ? _sBtnDanger : _sBtnPrimary))
+        if (GUI.Button(play, running ? "ARRÊTER" : "LANCER", running ? _sBtnDanger : _sBtnPrimary))
             CopperWire.SetAutomationEnabled(!running);
 
         Rect pill = new Rect(play.x - 138f, _panel.y + 10f, 128f, 24f);
@@ -207,18 +211,41 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         return _pillText;
     }
 
+    private static string ActionLabel(BehaviorActionType type)
+    {
+        switch (type)
+        {
+            case BehaviorActionType.Navigation: return "Navigation";
+            case BehaviorActionType.Collect: return "Collecte";
+            case BehaviorActionType.Combat: return "Combat";
+            default: return "Aucune";
+        }
+    }
+
+    private static string ActionStateLabel(BehaviorActionState state)
+    {
+        switch (state)
+        {
+            case BehaviorActionState.Running: return "en cours";
+            case BehaviorActionState.Completed: return "terminée";
+            case BehaviorActionState.Failed: return "échec";
+            case BehaviorActionState.Cancelled: return "annulée";
+            default: return state.ToString();
+        }
+    }
+
     private string StateText()
     {
         if (!CopperWire.AutomationEnabled)
-            return "STOPPED";
+            return "ARRÊTÉ";
         if (RespawnWire.IsActive)
-            return "RESPAWN";
+            return "RÉAPPARITION";
         if (SurvivalWire.IsFleeing)
-            return "FLEEING";
+            return "FUITE";
         if (SurvivalWire.IsRepairPaused)
-            return "REPAIRING";
+            return "RÉPARATION";
         BehaviorAction action = CopperWire.CurrentAction;
-        return action == null ? "IDLE" : action.Type.ToString().ToUpperInvariant();
+        return action == null ? "INACTIF" : ActionLabel(action.Type).ToUpperInvariant();
     }
 
     private Color StateColor()
@@ -261,8 +288,8 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
     private void DrawControlTab()
     {
-        BeginCard("Activities", "What the bot is allowed to do while automation is PLAY.");
-        bool collect = Switch(_collectEnabled, "Collect");
+        BeginCard("Activités", "Ce que le bot peut faire quand l'automatisation est lancée.");
+        bool collect = Switch(_collectEnabled, "Collecte");
         if (collect != _collectEnabled)
         {
             _collectEnabled = collect;
@@ -276,21 +303,28 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             _combatEnabled = combat;
             ApplyConfiguration();
         }
-        Hint("Navigation is the default activity when nothing else applies.");
+        Hint("La navigation est l'activité par défaut quand rien d'autre ne s'applique.");
         EndCard();
 
-        BeginCard("Priority", "Used when a collectible and a combat target are both available.");
+        BeginCard("Priorité", "Utilisée quand un collectible et une cible de combat sont disponibles.");
         int priority = Segmented(
             _priority == CombatCollectPriority.Collect ? 0 : 1,
-            "Collect first",
-            "Combat first");
+            "Collecte d'abord",
+            "Combat d'abord");
         SetPriority(priority == 0 ? CombatCollectPriority.Collect : CombatCollectPriority.Combat);
         EndCard();
 
         BeginCard("Combat");
-        bool longRange = Switch(CopperWire.LongRange, "Long-range combat spacing");
+        bool longRange = Switch(CopperWire.LongRange, "Espacement de combat longue portée");
         if (longRange != CopperWire.LongRange)
             CopperWire.SetLongRange(longRange);
+
+        bool fullHealth = Switch(Plugin.OnlyFullHealthTargets, "Attaquer uniquement les cibles à PV max");
+        if (fullHealth != Plugin.OnlyFullHealthTargets)
+            Plugin.SetOnlyFullHealthTargets(fullHealth);
+        Hint(Plugin.OnlyFullHealthTargets
+            ? "Seuls les NPC et monstres à PV max sont engagés ; les cibles déjà entamées sont ignorées."
+            : "Toutes les cibles sélectionnées peuvent être engagées, même déjà entamées.");
         EndCard();
     }
 
@@ -299,52 +333,52 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         EtatJeuSnapshot snapshot = GameState.ObtenirSnapshot();
         FicheJoueur player = snapshot == null ? null : snapshot.Joueur;
 
-        BeginCard("Hull");
+        BeginCard("Coque");
         if (player == null || player.VieMax <= 0)
         {
-            Hint("Waiting for a GameState player snapshot.");
+            Hint("En attente d'un instantané du joueur (GameState).");
         }
         else
         {
-            Row("HP", player.Vie + " / " + player.VieMax
+            Row("PV", player.Vie + " / " + player.VieMax
                 + "   (" + player.PourcentageVie.ToString("0", CultureInfo.InvariantCulture) + " %)");
             DrawHpBar(player.PourcentageVie);
-            Row("State", StateText());
+            Row("État", StateText());
         }
         EndCard();
 
-        BeginCard("Repair", "Sends the repair command while HP is below the threshold.");
-        bool repair = Switch(Plugin.RepairEnabled, "Repair enabled");
+        BeginCard("Réparation", "Envoie la commande de réparation tant que les PV sont sous le seuil.");
+        bool repair = Switch(Plugin.RepairEnabled, "Réparation activée");
         if (repair != Plugin.RepairEnabled)
             Plugin.SetRepairEnabled(repair);
 
         int repairMode = Segmented(
             Plugin.RepairPausesActivity ? 1 : 0,
-            "In activity",
-            "Stopped");
+            "En activité",
+            "À l'arrêt");
         Plugin.SetRepairPausesActivity(repairMode == 1);
         Hint(Plugin.RepairPausesActivity
-            ? "Stopped: all activity is paused and the ship stays still. Activity resumes at full HP."
-            : "In activity: repair runs during Navigation, Collect and Combat; the activity continues.");
+            ? "À l'arrêt : toute activité est suspendue et le navire reste immobile. L'activité reprend à PV pleins."
+            : "En activité : la réparation tourne pendant la navigation, la collecte et le combat ; l'activité continue.");
 
-        int repairPercent = PercentSlider("Repair at HP <=", Plugin.RepairPercent);
+        int repairPercent = PercentSlider("Réparer si PV <=", Plugin.RepairPercent);
         if (repairPercent != Plugin.RepairPercent)
             Plugin.SetRepairPercent(repairPercent);
         EndCard();
 
-        BeginCard("Low HP", "Abandons Combat and keeps navigating until HP recovers.");
-        bool flee = Switch(Plugin.FleeEnabled, "Flee enabled");
+        BeginCard("PV bas", "Abandonne le combat et continue de naviguer jusqu'à la remontée des PV.");
+        bool flee = Switch(Plugin.FleeEnabled, "Fuite activée");
         if (flee != Plugin.FleeEnabled)
             Plugin.SetFleeEnabled(flee);
 
-        int fleePercent = PercentSlider("Flee at HP <=", Plugin.FleePercent);
+        int fleePercent = PercentSlider("Fuir si PV <=", Plugin.FleePercent);
         if (fleePercent != Plugin.FleePercent)
             Plugin.SetFleePercent(fleePercent);
 
-        bool fleeCollect = Switch(Plugin.FleeCollectEnabled, "Collect while fleeing");
+        bool fleeCollect = Switch(Plugin.FleeCollectEnabled, "Collecter pendant la fuite");
         if (fleeCollect != Plugin.FleeCollectEnabled)
             Plugin.SetFleeCollectEnabled(fleeCollect);
-        Hint("Flee ends once HP is above both the flee and repair thresholds.");
+        Hint("La fuite se termine quand les PV dépassent à la fois le seuil de fuite et celui de réparation.");
         EndCard();
     }
 
@@ -354,32 +388,32 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         IReadOnlyList<string> monsterCatalog = TargetCatalog.Monsters;
         RefreshDisplayCatalogs();
 
-        BeginCard("Catalogs", "Select a target type; its ammo applies to every matching instance.");
-        Row("Targets", TargetCatalog.IsInitialized
-            ? npcCatalog.Count + " NPC types, " + monsterCatalog.Count + " monster types"
-            : "waiting for network-ready prefab scan");
-        Row("Ammo", AmmoCatalog.Bullets.Count + " bullet types, "
-            + AmmoCatalog.Harpoons.Count + " harpoon types");
-        Row("Selected", _selectedNpcs.Count + " NPC, " + _selectedMonsters.Count + " monster");
+        BeginCard("Catalogues", "Sélectionne un type de cible ; ses munitions s'appliquent à toutes les instances correspondantes.");
+        Row("Cibles", TargetCatalog.IsInitialized
+            ? npcCatalog.Count + " types de NPC, " + monsterCatalog.Count + " types de monstres"
+            : "en attente du scan réseau des prefabs");
+        Row("Munitions", AmmoCatalog.Bullets.Count + " types de boulets, "
+            + AmmoCatalog.Harpoons.Count + " types de harpons");
+        Row("Sélection", _selectedNpcs.Count + " NPC, " + _selectedMonsters.Count + " monstre(s)");
         EndCard();
 
-        DrawTargetGroup(TargetCategory.Npc, "NPCs");
-        DrawTargetGroup(TargetCategory.Monster, "Monsters");
+        DrawTargetGroup(TargetCategory.Npc, "NPC");
+        DrawTargetGroup(TargetCategory.Monster, "Monstres");
     }
 
     private void DrawCollectTab()
     {
         RefreshCollectibleCatalog();
 
-        BeginCard("Status");
-        Row("Collect", _collectEnabled ? "ON (Control tab)" : "OFF (Control tab)");
-        Row("Catalog", CollectibleCatalog.IsInitialized
+        BeginCard("Statut");
+        Row("Collecte", _collectEnabled ? "ACTIVÉE (onglet Contrôle)" : "DÉSACTIVÉE (onglet Contrôle)");
+        Row("Catalogue", CollectibleCatalog.IsInitialized
             ? _displayCollectibleTypes.Count + " types"
-            : "waiting for local player");
+            : "en attente du joueur local");
         Hint(CollectionStatusMessage());
         EndCard();
 
-        BeginCard("Collectible types", _enabledCollectibleTypes.Count + " enabled");
+        BeginCard("Types de collectibles", _enabledCollectibleTypes.Count + " activé(s)");
         for (int i = 0; i < _displayCollectibleTypes.Count; i++)
         {
             string typeName = _displayCollectibleTypes[i];
@@ -396,7 +430,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             }
         }
         if (_displayCollectibleTypes.Count == 0)
-            Hint("No collectible type yet.");
+            Hint("Aucun type de collectible pour l'instant.");
         EndCard();
     }
 
@@ -405,10 +439,10 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         BehaviorAction action = CopperWire.CurrentAction;
 
         BeginCard("Bot");
-        Row("System", CopperWire.SystemState.ToString());
-        Row("Action", action == null ? "None" : action.Type + " / " + action.State);
-        Row("Respawn", RespawnWire.IsActive
-            ? RespawnWire.IsAbandoned ? "active (attempts abandoned)" : "active"
+        Row("Système", CopperWire.SystemState == BehaviorSystemState.Respawn ? "Réapparition" : "Normal");
+        Row("Action", action == null ? "Aucune" : ActionLabel(action.Type) + " / " + ActionStateLabel(action.State));
+        Row("Réapparition", RespawnWire.IsActive
+            ? RespawnWire.IsAbandoned ? "active (tentatives abandonnées)" : "active"
             : "inactive");
 
         CombatTarget target = CopperWire.CurrentCombatTarget;
@@ -416,40 +450,40 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         {
             string category = target.WeaponCategory.HasValue
                 ? target.WeaponCategory.Value.ToString()
-                : "unclassified";
-            Row("Target", target.Name + " (" + category + ")"
+                : "non classée";
+            Row("Cible", target.Name + " (" + category + ")"
                 + (string.IsNullOrEmpty(target.Category) ? string.Empty : " / " + target.Category)
                 + (string.IsNullOrEmpty(target.Type) ? string.Empty : " / " + target.Type));
             if (target.WeaponCategory.HasValue)
             {
                 TargetCategory weapon = target.WeaponCategory.Value;
-                Row("Ammo", "desired " + DescribeAmmo(weapon, target.AmmoId)
-                    + " | selected " + DescribeAmmo(weapon, CopperWire.GetSelectedAmmoId(weapon)));
+                Row("Munitions", "voulues " + DescribeAmmo(weapon, target.AmmoId)
+                    + " | sélectionnées " + DescribeAmmo(weapon, CopperWire.GetSelectedAmmoId(weapon)));
             }
         }
         else if (action != null && action.Type == BehaviorActionType.Collect)
         {
             CollectActionContext context = action.Context as CollectActionContext;
-            Row("Collectible", context == null ? "unknown" : "NetId " + context.NetId);
+            Row("Collectible", context == null ? "inconnu" : "NetId " + context.NetId);
         }
         EndCard();
 
         EtatJeuSnapshot snapshot = GameState.ObtenirSnapshot();
         FicheJoueur player = snapshot == null ? null : snapshot.Joueur;
-        BeginCard("Player");
+        BeginCard("Joueur");
         if (player == null)
         {
-            Hint("Waiting for a GameState snapshot.");
+            Hint("En attente d'un instantané GameState.");
         }
         else
         {
-            Row("HP", player.Vie + " / " + player.VieMax);
-            Row("Range", "cannon " + FormatNumber(player.Portee)
-                + " | harpoon " + FormatNumber(player.PorteeHarpon));
-            Row("Map", player.Harita
+            Row("PV", player.Vie + " / " + player.VieMax);
+            Row("Portée", "canon " + FormatNumber(player.Portee)
+                + " | harpon " + FormatNumber(player.PorteeHarpon));
+            Row("Carte", player.Harita
                 + (string.IsNullOrEmpty(player.NomHarita) ? string.Empty : " / " + player.NomHarita));
             Row("Position", (player.CoordonneeSayi ?? "?") + " " + (player.CoordonneeHarf ?? "?")
-                + " | world " + FormatNumber(player.X) + ", " + FormatNumber(player.Y));
+                + " | monde " + FormatNumber(player.X) + ", " + FormatNumber(player.Y));
         }
         EndCard();
     }
@@ -488,7 +522,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     {
         GUILayout.BeginHorizontal();
         bool clicked = GUILayout.Button(
-            value ? "ON" : "OFF",
+            value ? "OUI" : "NON",
             value ? _sSwitchOn : _sSwitchOff,
             GUILayout.Width(54f),
             GUILayout.Height(24f));
@@ -554,7 +588,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         }
         GUI.color = previous;
         GUILayout.Space(2f);
-        Hint("Markers: blue = repair threshold, orange = flee threshold.");
+        Hint("Repères : bleu = seuil de réparation, orange = seuil de fuite.");
     }
 
     // ------------------------------------------------------------------ Styles
@@ -703,6 +737,11 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         Paint(_sSegOn, ColAccentDim, ColAccentDim, ColText);
         _sSegOn.fontStyle = FontStyle.Bold;
 
+        _sFold = CloneStyle(_sBtn);
+        _sFold.alignment = TextAnchor.MiddleLeft;
+        _sFold.fontStyle = FontStyle.Bold;
+        _sFold.padding = new RectOffset(12, 8, 4, 4);
+
         _sRow = CloneStyle(_sBtn);
         _sRow.alignment = TextAnchor.MiddleLeft;
         _sRow.padding = new RectOffset(12, 8, 4, 4);
@@ -752,31 +791,31 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             }
         }
 
-        string counts = "Live collectibles: " + observedCount
-            + " | matching enabled types: " + enabledObservedCount
-            + " | enabled types: " + _enabledCollectibleTypes.Count + ". ";
+        string counts = "Collectibles visibles : " + observedCount
+            + " | types activés correspondants : " + enabledObservedCount
+            + " | types activés : " + _enabledCollectibleTypes.Count + ". ";
 
         if (!CopperWire.AutomationEnabled)
-            return counts + "Collection is blocked: press PLAY (automation starts STOP).";
+            return counts + "Collecte bloquée : appuie sur LANCER (l'automatisation démarre à l'arrêt).";
         if (!_collectEnabled)
-            return counts + "Collection is blocked: turn on Collect in the Control tab.";
+            return counts + "Collecte bloquée : active la collecte dans l'onglet Contrôle.";
         if (_enabledCollectibleTypes.Count == 0)
-            return counts + "Collection is blocked: enable at least one collectible type below.";
+            return counts + "Collecte bloquée : active au moins un type de collectible ci-dessous.";
         if (snapshot == null || snapshot.Joueur == null)
-            return counts + "Waiting for a GameState player snapshot.";
+            return counts + "En attente d'un instantané du joueur (GameState).";
         if (observedCount == 0)
-            return counts + "No collectible is currently visible in the GameState snapshot.";
+            return counts + "Aucun collectible n'est visible dans l'instantané GameState.";
         if (enabledObservedCount == 0)
-            return counts + "Collectibles are visible, but none match an enabled type.";
+            return counts + "Des collectibles sont visibles, mais aucun ne correspond à un type activé.";
         if (action != null && action.Type == BehaviorActionType.Collect)
         {
             CollectActionContext context = action.Context as CollectActionContext;
-            return counts + "Collect action: " + action.State
+            return counts + "Action de collecte : " + ActionStateLabel(action.State)
                 + (context == null ? string.Empty : " | NetId " + context.NetId + " | " + context.Type);
         }
         if (action != null)
-            return counts + "Current action: " + action.Type + " / " + action.State;
-        return counts + "An eligible collectible is visible; waiting for the next planner tick.";
+            return counts + "Action en cours : " + ActionLabel(action.Type) + " / " + ActionStateLabel(action.State);
+        return counts + "Un collectible éligible est visible ; en attente du prochain cycle du planificateur.";
     }
 
     [HideFromIl2Cpp]
@@ -824,14 +863,38 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         TargetCategory category,
         string label)
     {
-        List<string> catalog = category == TargetCategory.Monster
-            ? _displayMonsters
-            : _displayNpcs;
-        BeginCard(label, catalog.Count + " types in catalog");
+        bool isMonster = category == TargetCategory.Monster;
+        List<string> catalog = isMonster ? _displayMonsters : _displayNpcs;
+        bool open = isMonster ? _openMonsters : _openNpcs;
+        int selectedCount = (isMonster ? _selectedMonsters : _selectedNpcs).Count;
+
+        GUILayout.BeginVertical(_sCard);
+        string caption = label.ToUpperInvariant() + "   -   " + selectedCount + " sélectionné(s) sur "
+            + catalog.Count + (open ? "   [replier]" : "   [déplier]");
+        if (GUILayout.Button(caption, _sFold, GUILayout.Height(28f)))
+        {
+            open = !open;
+            if (isMonster)
+                _openMonsters = open;
+            else
+                _openNpcs = open;
+            CloseAmmoEditor();
+        }
+
+        if (open)
+            DrawTargetRows(category, catalog);
+
+        GUILayout.EndVertical();
+        GUILayout.Space(10f);
+    }
+
+    [HideFromIl2Cpp]
+    private void DrawTargetRows(TargetCategory category, List<string> catalog)
+    {
+        GUILayout.Space(4f);
         if (!TargetCatalog.IsInitialized)
         {
-            Hint("Waiting for the runtime target catalog.");
-            EndCard();
+            Hint("En attente du catalogue de cibles du jeu.");
             return;
         }
 
@@ -846,17 +909,9 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             if (isSelected != wasSelected)
             {
                 SetTargetSelected(category, name, isSelected);
-                if (isSelected)
-                {
-                    _editingAmmoTarget = targetKey;
-                    _editingAmmoCategory = category;
-                    _editingAmmoName = name;
-                }
-                else
-                {
-                    if (string.Equals(_editingAmmoTarget, targetKey, StringComparison.OrdinalIgnoreCase))
-                        CloseAmmoEditor();
-                }
+                if (!isSelected
+                    && string.Equals(_editingAmmoTarget, targetKey, StringComparison.OrdinalIgnoreCase))
+                    CloseAmmoEditor();
                 ApplyConfiguration();
             }
 
@@ -864,13 +919,16 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             {
                 IReadOnlyList<AmmoDefinition> ammo = GetAmmoCatalog(category);
                 int? id = ResolveAmmo(category, name);
+                bool dropdownOpen = string.Equals(
+                    _editingAmmoTarget, targetKey, StringComparison.OrdinalIgnoreCase);
                 string caption = ammo.Count == 0
-                    ? (category == TargetCategory.Npc ? "Cannonball unavailable" : "Ammo unavailable")
-                    : (category == TargetCategory.Npc ? "Cannonball: " : "Harpoon: ")
-                        + DescribeAmmo(category, id);
-                if (GUILayout.Button(caption, _sBtn, GUILayout.Width(260f), GUILayout.Height(26f)))
+                    ? (category == TargetCategory.Npc ? "Boulet indisponible" : "Munitions indisponibles")
+                    : (category == TargetCategory.Npc ? "Boulet : " : "Harpon : ")
+                        + DescribeAmmo(category, id) + (dropdownOpen ? "  ^" : "  v");
+                if (GUILayout.Button(caption, dropdownOpen ? _sSegOn : _sBtn,
+                        GUILayout.Width(270f), GUILayout.Height(26f)))
                 {
-                    if (string.Equals(_editingAmmoTarget, targetKey, StringComparison.OrdinalIgnoreCase))
+                    if (dropdownOpen)
                     {
                         CloseAmmoEditor();
                     }
@@ -879,23 +937,18 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
                         _editingAmmoTarget = targetKey;
                         _editingAmmoCategory = category;
                         _editingAmmoName = name;
+                        _ammoScroll = Vector2.zero;
                     }
                 }
             }
             GUILayout.EndHorizontal();
 
-            if (string.Equals(
-                _editingAmmoTarget,
-                targetKey,
-                StringComparison.OrdinalIgnoreCase))
-            {
-                DrawAmmoEditor();
-            }
+            if (string.Equals(_editingAmmoTarget, targetKey, StringComparison.OrdinalIgnoreCase))
+                DrawAmmoDropdown(category, name);
         }
 
         if (catalog.Count == 0)
-            Hint("No types in this catalog.");
-        EndCard();
+            Hint("Aucun type dans ce catalogue.");
     }
 
     private void RefreshDisplayCatalogs()
@@ -939,52 +992,35 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             targets.Remove(name);
     }
 
-    private void DrawAmmoEditor()
+    [HideFromIl2Cpp]
+    private void DrawAmmoDropdown(TargetCategory category, string name)
     {
-        if (string.IsNullOrEmpty(_editingAmmoTarget))
-            return;
-
-        if (_editingAmmoCategory == TargetCategory.Monster
-            && !IsTargetSelected(_editingAmmoCategory, _editingAmmoName))
-        {
-            CloseAmmoEditor();
-            return;
-        }
-
-        GUILayout.BeginVertical(_sCard);
-        GUILayout.Label(
-            (_editingAmmoCategory == TargetCategory.Npc ? "Cannonballs for NPC / " : "Harpoons for Monster / ")
-            + _editingAmmoName
-            + " (applies to every runtime instance)",
-            _sMuted);
-        if (GUILayout.Button("Close ammo list", _sBtn, GUILayout.Height(24f)))
-        {
-            CloseAmmoEditor();
-            GUILayout.EndVertical();
-            return;
-        }
-
-        IReadOnlyList<AmmoDefinition> catalog = GetAmmoCatalog(_editingAmmoCategory);
+        IReadOnlyList<AmmoDefinition> catalog = GetAmmoCatalog(category);
         if (catalog.Count == 0)
         {
-            Hint("Waiting for the matching live ammo catalog.");
+            Hint("En attente du catalogue de munitions du jeu.");
+            return;
         }
-        else
+
+        GUILayout.Label(
+            (category == TargetCategory.Npc ? "Boulets pour " : "Harpons pour ") + name
+            + " (appliqué à toutes les instances)",
+            _sMuted);
+        float height = Mathf.Min(180f, catalog.Count * 30f + 4f);
+        _ammoScroll = GUILayout.BeginScrollView(_ammoScroll, GUILayout.Height(height));
+        int? currentId = ResolveAmmo(category, name);
+        for (int i = 0; i < catalog.Count; i++)
         {
-            int? currentId = ResolveAmmo(_editingAmmoCategory, _editingAmmoName);
-            for (int i = 0; i < catalog.Count; i++)
+            AmmoDefinition ammo = catalog[i];
+            bool isCurrent = currentId.HasValue && currentId.Value == ammo.Id;
+            if (RowToggle(isCurrent, FormatAmmo(ammo)) && !isCurrent)
             {
-                AmmoDefinition ammo = catalog[i];
-                bool isSelected = currentId.HasValue && currentId.Value == ammo.Id;
-                bool choose = RowToggle(isSelected, FormatAmmo(ammo));
-                if (choose && !isSelected)
-                {
-                    _ammoByTarget[_editingAmmoTarget] = ammo.Id;
-                    ApplyConfiguration();
-                }
+                _ammoByTarget[GetTargetKey(category, name)] = ammo.Id;
+                ApplyConfiguration();
+                CloseAmmoEditor();
             }
         }
-        GUILayout.EndVertical();
+        GUILayout.EndScrollView();
         GUILayout.Space(6f);
     }
 
@@ -1044,7 +1080,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private string DescribeAmmo(TargetCategory category, int? id)
     {
         if (!id.HasValue)
-            return "unavailable";
+            return "indisponible";
 
         IReadOnlyList<AmmoDefinition> catalog = GetAmmoCatalog(category);
         for (int i = 0; i < catalog.Count; i++)

@@ -32,6 +32,7 @@ namespace EtatJoueurMod
         private static ConfigEntry<int> _fleePercent;
         private static ConfigEntry<bool> _fleeCollectEnabled;
         private static ConfigEntry<bool> _repairPausesActivity;
+        private static ConfigEntry<bool> _onlyFullHealthTargets;
         private static readonly Dictionary<string, ConfigEntry<bool>> CollectibleTypeSettings =
             new Dictionary<string, ConfigEntry<bool>>(StringComparer.Ordinal);
         private static Il2CppSystem.Action _targetCatalogDisconnectHandler;
@@ -113,6 +114,16 @@ namespace EtatJoueurMod
             get { return _fleeCollectEnabled != null && _fleeCollectEnabled.Value; }
         }
 
+        public static bool OnlyFullHealthTargets
+        {
+            get { return _onlyFullHealthTargets != null && _onlyFullHealthTargets.Value; }
+        }
+
+        public static void SetOnlyFullHealthTargets(bool enabled)
+        {
+            SetSetting(_onlyFullHealthTargets, enabled);
+        }
+
         public static bool RepairPausesActivity
         {
             get { return _repairPausesActivity != null && _repairPausesActivity.Value; }
@@ -167,6 +178,8 @@ namespace EtatJoueurMod
                 "While HP <= FleePercent, abandon Combat (and Collect unless FleeCollectEnabled) and navigate until HP recovers.");
             _fleeCollectEnabled = _config.Bind("Survival", "FleeCollectEnabled", false,
                 "Allow collecting (never combat) while fleeing.");
+            _onlyFullHealthTargets = _config.Bind("Combat", "OnlyFullHealthTargets", false,
+                "Only engage NPCs / monsters that are at full HP. When false, damaged targets can be engaged too.");
             _repairPausesActivity = _config.Bind("Survival", "RepairPausesActivity", false,
                 "Repair mode: false = repair during activity, true = stop all activity (ship still) and repair, resume at full HP.");
             _fleePercent = _config.Bind("Survival", "FleePercent", 60,

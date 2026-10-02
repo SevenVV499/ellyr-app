@@ -598,6 +598,12 @@ public sealed class BluePencil
                 if (pnj == null || pnj.Id == 0 || pnj.Vie <= 0
                     || IsInvalidDistance(pnj.Distance) || !_allowPnj(pnj))
                     continue;
+
+                // Option « cibles à PV max » : une cible déjà entamée n'est pas engagée.
+                // PV max inconnu (<= 0) : pas de filtre. Ne concerne que le choix d'une
+                // nouvelle cible, jamais un combat déjà en cours.
+                if (Plugin.OnlyFullHealthTargets && pnj.VieMax > 0 && pnj.Vie < pnj.VieMax)
+                    continue;
                 if (AUneRecompenseConnue(snapshot, pnj.Id, RewardSourceType.Monstre, RewardSourceType.Pnj))
                     continue;
 
