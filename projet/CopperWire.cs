@@ -1371,6 +1371,21 @@ public static class CopperWire
             if (player.aiLerp != null)
                 player.aiLerp.isStopped = false;
             player.HedefeGit(column, row);
+            if (!HedefeGitAppliedDestination(player, column, row))
+            {
+                // Les tables natives de HedefeGit ne couvrent pas toutes les cartes
+                // (deux d'entre elles n'ont que 31 entrées) : il sort alors sans donner
+                // l'ordre. On reprend par les coordonnées du monde, comme un clic.
+                if (!_hedefeGitFallbackLogged)
+                {
+                    _hedefeGitFallbackLogged = true;
+                    Plugin.Logger.LogInfo(
+                        "[CopperWire] HedefeGit n'a pas appliqué la destination sur la carte "
+                        + player.harita + " : repli par coordonnées du monde.");
+                }
+                return IssueMoveToCellWorld(player, column, row, cell);
+            }
+
             _lastMoveCell = cell;
             return true;
         }
@@ -1379,6 +1394,34 @@ public static class CopperWire
             Plugin.Logger.LogError("[CopperWire] Player.HedefeGit a échoué : " + e);
             return false;
         }
+    }
+
+    private static bool _hedefeGitFallbackLogged;
+
+    // Vrai si la destination locale du déplacement est bien celle de la case demandée
+    // (à deux cases près). En cas de doute, ou si la grille de la carte est inconnue,
+    // on considère que l'ordre est passé.
+    private static bool HedefeGitAppliedDestination(Player player, int column, string row)
+    {
+        if (player.aiLerp == null)
+            return true;
+
+        float minX, maxX, minY, maxY;
+        int lastColumn, lastLine;
+        int line = PositionReelle.IndexLigne(row);
+        if (line < 0
+            || !PositionReelle.ObtenirGrille(
+                player.harita, out minX, out maxX, out minY, out maxY, out lastColumn, out lastLine)
+            || lastColumn <= 0
+            || lastLine <= 0)
+            return true;
+
+        float stepX = (maxX - minX) / lastColumn;
+        float stepY = (maxY - minY) / lastLine;
+        Vector2 expected = new Vector2(minX + column * stepX, minY + line * stepY);
+        Vector3 destination = player.aiLerp.destination;
+        float tolerance = 2f * Math.Max(stepX, stepY);
+        return Vector2.Distance(new Vector2(destination.x, destination.y), expected) <= tolerance;
     }
 
     private static bool TryGetCombatTargetPosition(
