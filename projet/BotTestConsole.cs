@@ -215,19 +215,12 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         // ----- Bloc 2 : PV bas (fuite / arrêt d'activité) -----
         GUILayout.BeginVertical(GUI.skin.box);
         GUILayout.Label("LOW HP");
-        bool flee = GUILayout.Toggle(Plugin.FleeEnabled, "Low-HP response enabled");
+        bool flee = GUILayout.Toggle(Plugin.FleeEnabled, "Flee enabled");
         if (flee != Plugin.FleeEnabled)
             Plugin.SetFleeEnabled(flee);
 
         GUILayout.BeginHorizontal();
-        if (GUILayout.Button(Plugin.HaltInsteadOfFlee ? "Flee" : "[Flee]"))
-            Plugin.SetHaltInsteadOfFlee(false);
-        if (GUILayout.Button(Plugin.HaltInsteadOfFlee ? "[Halt activity]" : "Halt activity"))
-            Plugin.SetHaltInsteadOfFlee(true);
-        GUILayout.EndHorizontal();
-
-        GUILayout.BeginHorizontal();
-        GUILayout.Label("Low-HP response at HP <= " + Plugin.FleePercent + " %", GUILayout.Width(160f));
+        GUILayout.Label("Flee at HP <= " + Plugin.FleePercent + " %", GUILayout.Width(160f));
         int fleePercent = Mathf.RoundToInt(
             GUILayout.HorizontalSlider(Plugin.FleePercent, 0f, 100f));
         GUILayout.EndHorizontal();
@@ -235,7 +228,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             Plugin.SetFleePercent(fleePercent);
 
         bool fleeCollect = GUILayout.Toggle(
-            Plugin.FleeCollectEnabled, "Collect while fleeing (Flee mode)");
+            Plugin.FleeCollectEnabled, "Collect while fleeing");
         if (fleeCollect != Plugin.FleeCollectEnabled)
             Plugin.SetFleeCollectEnabled(fleeCollect);
         GUILayout.EndVertical();
@@ -244,8 +237,6 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             GUILayout.Label("State: FLEEING");
         else if (SurvivalWire.IsRepairPaused)
             GUILayout.Label("State: PAUSED (repairing)");
-        else if (SurvivalWire.IsHalting)
-            GUILayout.Label("State: HALTED (repairing)");
     }
 
     [HideFromIl2Cpp]

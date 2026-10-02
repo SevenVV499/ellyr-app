@@ -31,7 +31,6 @@ namespace EtatJoueurMod
         private static ConfigEntry<bool> _fleeEnabled;
         private static ConfigEntry<int> _fleePercent;
         private static ConfigEntry<bool> _fleeCollectEnabled;
-        private static ConfigEntry<bool> _haltInsteadOfFlee;
         private static ConfigEntry<bool> _repairPausesActivity;
         private static readonly Dictionary<string, ConfigEntry<bool>> CollectibleTypeSettings =
             new Dictionary<string, ConfigEntry<bool>>(StringComparer.Ordinal);
@@ -124,16 +123,6 @@ namespace EtatJoueurMod
             SetSetting(_repairPausesActivity, enabled);
         }
 
-        public static bool HaltInsteadOfFlee
-        {
-            get { return _haltInsteadOfFlee != null && _haltInsteadOfFlee.Value; }
-        }
-
-        public static void SetHaltInsteadOfFlee(bool enabled)
-        {
-            SetSetting(_haltInsteadOfFlee, enabled);
-        }
-
         public static void SetFleeCollectEnabled(bool enabled)
         {
             SetSetting(_fleeCollectEnabled, enabled);
@@ -180,8 +169,6 @@ namespace EtatJoueurMod
                 "Allow collecting (never combat) while fleeing.");
             _repairPausesActivity = _config.Bind("Survival", "RepairPausesActivity", false,
                 "Repair mode: false = repair during activity, true = stop all activity (ship still) and repair, resume at full HP.");
-            _haltInsteadOfFlee = _config.Bind("Survival", "HaltInsteadOfFlee", false,
-                "At FleePercent, stop all activity and stay still (repair only) instead of fleeing.");
             _fleePercent = _config.Bind("Survival", "FleePercent", 60,
                 new ConfigDescription("Flee trigger threshold, in percent of max HP.", percentRange));
         }
