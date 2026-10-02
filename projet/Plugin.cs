@@ -215,12 +215,21 @@ namespace EtatJoueurMod
             Logger.LogInfo("[CollectConfig] " + typeName + " = " + (enabled ? "Enabled" : "Disabled"));
         }
 
+        // Liste de types pour laquelle les réglages ont déjà été créés. Le catalogue
+        // produit une nouvelle liste à chaque (re)chargement : comparer la référence
+        // suffit pour ne refaire le parcours qu'une fois par chargement du catalogue.
+        private static IReadOnlyList<Type> _configuredCollectibleTypes;
+
         internal static void InitializeCollectibleConfiguration()
         {
             if (_collectEnabled == null)
                 _collectEnabled = _config.Bind("Collect", "CollectEnabled", false, "Allow collectible collection.");
 
-            foreach (Type type in CollectibleCatalog.CollectibleTypes)
+            IReadOnlyList<Type> types = CollectibleCatalog.CollectibleTypes;
+            if (types.Count == 0 || ReferenceEquals(types, _configuredCollectibleTypes))
+                return;
+
+            foreach (Type type in types)
             {
                 if (CollectibleTypeSettings.ContainsKey(type.Name))
                     continue;
@@ -230,6 +239,8 @@ namespace EtatJoueurMod
                     _config.Bind("Collectible types", type.Name, false,
                         "Allow collecting runtime collectible type " + type.FullName + "."));
             }
+
+            _configuredCollectibleTypes = types;
         }
 
         private static void OnApplicationFocusChanged(bool focused)
