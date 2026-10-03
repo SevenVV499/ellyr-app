@@ -16,8 +16,9 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private const int TabTargets = 2;
     private const int TabCollect = 3;
     private const int TabStatus = 4;
+    private const int TabEvents = 5;
     private static readonly string[] TabLabels =
-        { "Contrôle", "Survie", "Cibles", "Collecte", "État" };
+        { "Contrôle", "Survie", "Cibles", "Collecte", "État", "Événements" };
 
     private const float HeaderHeight = 44f;
     private const float TabBarHeight = 34f;
@@ -142,6 +143,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             case TabSurvival: DrawSurvivalTab(); break;
             case TabTargets: DrawTargetsTab(); break;
             case TabCollect: DrawCollectTab(); break;
+            case TabEvents: DrawEventsTab(); break;
             default: DrawStatusTab(); break;
         }
         GUILayout.EndScrollView();
@@ -430,6 +432,94 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         if (_displayCollectibleTypes.Count == 0)
             Hint("Aucun type de collectible pour l'instant.");
         EndCard();
+    }
+
+    // ------------------------------------------------------------------ Événements
+
+    // Navires d'événement présents côté client, alimentés par le scan réseau : un navire
+    // qui n'est plus présent ou qui tombe à 0 PV sort de la liste.
+    private const string EventShipCategory = "npc_navire_event";
+    private List<PnjInfo> _eventShips = new List<PnjInfo>();
+    private DateTime _eventShipsStamp;
+
+    [HideFromIl2Cpp]
+    private void RefreshEventShips(EtatJeuSnapshot snapshot)
+    {
+        if (snapshot == null || snapshot.Pnjs == null)
+        {
+            _eventShips.Clear();
+            _eventShipsStamp = default(DateTime);
+            return;
+        }
+
+        // OnGUI s'exécute plusieurs fois par image : on ne reconstruit la liste que
+        // lorsqu'un nouvel instantané est publié.
+        if (snapshot.Timestamp == _eventShipsStamp)
+            return;
+
+        _eventShipsStamp = snapshot.Timestamp;
+        _eventShips.Clear();
+        for (int i = 0; i < snapshot.Pnjs.Count; i++)
+        {
+            PnjInfo pnj = snapshot.Pnjs[i];
+            if (pnj != null
+                && pnj.Vie > 0
+                && string.Equals(pnj.Categorie, EventShipCategory, StringComparison.Ordinal))
+                _eventShips.Add(pnj);
+        }
+        _eventShips.Sort(CompareEventShips);
+    }
+
+    [HideFromIl2Cpp]
+    private static int CompareEventShips(PnjInfo a, PnjInfo b)
+    {
+        int carte = a.Harita.CompareTo(b.Harita);
+        if (carte != 0)
+            return carte;
+        return string.Compare(a.Nom, b.Nom, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [HideFromIl2Cpp]
+    private void DrawEventsTab()
+    {
+        RefreshEventShips(GameState.ObtenirSnapshot());
+
+        BeginCard(
+            "Navires d'événement",
+            _eventShips.Count + " présent(s), triés par carte puis par nom.");
+        Hint("Seuls les navires que le serveur envoie à ton client sont listés. Un navire "
+            + "sort de la liste quand il n'est plus présent ou à 0 PV.");
+        EndCard();
+
+        BeginCard("Liste");
+        if (_eventShips.Count == 0)
+            Hint("Aucun navire d'événement pour l'instant.");
+        for (int i = 0; i < _eventShips.Count; i++)
+            DrawEventShipRow(_eventShips[i]);
+        EndCard();
+    }
+
+    [HideFromIl2Cpp]
+    private void DrawEventShipRow(PnjInfo pnj)
+    {
+        GUILayout.BeginVertical(_sSeg);
+        GUILayout.BeginHorizontal();
+        GUILayout.Label(string.IsNullOrEmpty(pnj.Nom) ? "?" : pnj.Nom, _sLabel);
+        GUILayout.Label("PV " + pnj.Vie + " / " + pnj.VieMax, _sValue, GUILayout.Width(150f));
+        GUILayout.EndHorizontal();
+
+        string carte = pnj.Harita > 0
+            ? pnj.Harita + (string.IsNullOrEmpty(pnj.NomHarita) ? string.Empty : " / " + pnj.NomHarita)
+            : "inconnue";
+        GUILayout.Label(
+            pnj.Type
+            + "  |  carte " + carte
+            + "  |  " + (pnj.CoordonneeSayi ?? "?") + " " + (pnj.CoordonneeHarf ?? "?")
+            + " (monde " + FormatNumber(pnj.X) + ", " + FormatNumber(pnj.Y) + ")"
+            + "  |  distance " + FormatNumber(pnj.Distance),
+            _sMuted);
+        GUILayout.EndVertical();
+        GUILayout.Space(4f);
     }
 
     private void DrawStatusTab()

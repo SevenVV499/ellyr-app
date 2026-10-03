@@ -1701,6 +1701,17 @@ namespace EtatJoueurMod
                     return i + 1;
             }
 
+            // Cartes spéciales 41 à 46, testées après les ordinaires. La 42 a exactement
+            // les limites de la 14 : un point de la 42 est donc reconnu comme étant de la 14.
+            for (int i = 0; i < IndexReferenceSpeciale.Length; i++)
+            {
+                int harita = PremiereCarteSpeciale + i;
+                float minX, maxX, minY, maxY;
+                if (TryLimitesCarte(harita, out minX, out maxX, out minY, out maxY)
+                    && x >= minX && x <= maxX && y >= minY && y <= maxY)
+                    return harita;
+            }
+
             return 0;
         }
     }
