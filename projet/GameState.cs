@@ -753,6 +753,10 @@ namespace EtatJoueurMod
         {
             if (_classifieursPnj == null)
             {
+                // Champ de carte lu dans le composant : AllNpcs.HaritaKac (vérifié : carte réelle),
+                // EventShip.Map et BaronShip.Map. Les navires EtkinlikKucukGemi* ont aussi un champ
+                // HaritaKac, mais il vaut toujours 1 (ce n'est pas la carte courante) : la carte de
+                // ces navires est donc retrouvée d'après leur position.
                 var liste = new List<Func<GameObject, PnjSuivi>>();
             liste.Add(CreerClassifieurPnj<AllMonsters>("monstre", p => p.geminame, p => p.Can, p => p.MaksCan, p => 0f));
             liste.Add(CreerClassifieurPnj<CalypsoAllMonsters>("monstre", p => p.geminame, p => p.Can, p => p.MaksCan, p => 0f));
@@ -773,19 +777,19 @@ namespace EtatJoueurMod
             liste.Add(CreerClassifieurPnj<EtkinlikAnaGemileriPaskalya>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
             liste.Add(CreerClassifieurPnj<MiniEventShip>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
             liste.Add(CreerClassifieurPnj<RaidProKucuk>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemileri>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemileriBonus>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemileriKorsan>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemileriMagellan>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiCalypso>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiHel>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiIce>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiIcePearl>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiKaplumbaga>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiMagellan>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiSampiyon>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiValentin>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiOzgurluk>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemileri>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemileriBonus>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemileriKorsan>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemileriMagellan>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiCalypso>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiHel>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiIce>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiIcePearl>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiKaplumbaga>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiMagellan>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiSampiyon>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiValentin>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiOzgurluk>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
             liste.Add(CreerClassifieurPnj<KuleKontrol>("tour_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => 0f));
                 _classifieursPnj = liste;
             }

@@ -263,6 +263,7 @@ public static class CopperWire
             return;
 
         WorldMoveProbe(instance);
+        RefreshSpecialMapBounds(instance, instance.harita);
 
         long collectSignalRevision = GameState.RevisionSignauxCollecte;
         bool newCollectSignal = collectSignalRevision != _lastCollectSignalRevision;
