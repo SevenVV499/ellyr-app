@@ -56,6 +56,11 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private Vector2 _scrollPosition;
     private bool _visible = true;
     private bool _dragging;
+
+    // Vrai quand le pointeur est sur la console (ou qu'on la déplace) : lu par le patch du
+    // clic sur la mer pour que le clic ne traverse pas la console jusqu'au jeu.
+    private static bool _pointerOverConsole;
+    public static bool PointerOverConsole { get { return _pointerOverConsole; } }
     private Vector2 _dragOffset;
     private int _activeTab;
     private bool _collectEnabled;
@@ -119,7 +124,10 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private void OnGUI()
     {
         if (!_visible)
+        {
+            _pointerOverConsole = false;
             return;
+        }
 
         EnsureStyles();
 
@@ -127,6 +135,10 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         _panel.height = Mathf.Min(_panel.height, Mathf.Max(320f, Screen.height - 16f));
         _panel.x = Mathf.Clamp(_panel.x, 0f, Mathf.Max(0f, Screen.width - _panel.width));
         _panel.y = Mathf.Clamp(_panel.y, 0f, Mathf.Max(0f, Screen.height - _panel.height));
+
+        Event current = Event.current;
+        _pointerOverConsole = _dragging
+            || (current != null && _panel.Contains(current.mousePosition));
 
         GUI.Box(_panel, GUIContent.none, _sWindow);
         HandleDrag();

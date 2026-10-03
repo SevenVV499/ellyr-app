@@ -529,4 +529,33 @@ namespace EtatJoueurMod
             return false;
         }
     }
+
+    // Clic sur la mer (déplacement manuel) : la console est dessinée en IMGUI, qui ne
+    // bloque pas les clics lus par le jeu. Tant que le pointeur est sur la console, le
+    // gestionnaire de clic du jeu est donc sauté.
+    [HarmonyPatch(typeof(Player), "OyuncuGitmekIstenilenYereTikla")]
+    public static class Patch_Player_ClicSurMer
+    {
+        [HarmonyPrepare]
+        public static bool Prepare()
+        {
+            MethodInfo methode = Hooks.TrouverMethodeUnique(typeof(Player), "OyuncuGitmekIstenilenYereTikla");
+            if (methode == null)
+                return false;
+
+            if (methode.ReturnType != typeof(void) || methode.GetParameters().Length != 0)
+            {
+                Plugin.Logger.LogError(
+                    "[EtatJoueur] OyuncuGitmekIstenilenYereTikla a une signature inattendue : "
+                    + "la console ne bloquera pas les clics sur la mer.");
+                return false;
+            }
+            return true;
+        }
+
+        public static bool Prefix()
+        {
+            return !BotTestConsoleBehaviour.PointerOverConsole;
+        }
+    }
 }
