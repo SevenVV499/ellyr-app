@@ -1571,6 +1571,24 @@ namespace EtatJoueurMod
         private static readonly int[] IndexReferenceSpeciale = { 12, 13, 12, 13, 12, 13 };
         private static readonly int[] LargeursDecalageSpeciale = { 1, 0, 2, 3, 4, 5 };
 
+        // Limites réelles d'une carte spéciale, relevées dans le graphe A* qui contient le
+        // navire. Elles priment sur la règle de KoordinatGetir, qui ne vaut que pour
+        // l'affichage des coordonnées (les cartes sont espacées d'environ 160 unités dans
+        // le monde alors que la largeur d'une carte est d'environ 110).
+        private static readonly Dictionary<int, float[]> _limitesObservees =
+            new Dictionary<int, float[]>();
+
+        public static void DefinirLimitesObservees(
+            int harita, float minX, float maxX, float minY, float maxY)
+        {
+            _limitesObservees[harita] = new[] { minX, maxX, minY, maxY };
+        }
+
+        public static bool ALimitesObservees(int harita)
+        {
+            return _limitesObservees.ContainsKey(harita);
+        }
+
         public static bool EstCarteSpeciale(int harita)
         {
             int i = harita - PremiereCarteSpeciale;
@@ -1581,6 +1599,16 @@ namespace EtatJoueurMod
             int harita, out float minX, out float maxX, out float minY, out float maxY)
         {
             minX = maxX = minY = maxY = 0f;
+
+            float[] observees;
+            if (_limitesObservees.TryGetValue(harita, out observees))
+            {
+                minX = observees[0];
+                maxX = observees[1];
+                minY = observees[2];
+                maxY = observees[3];
+                return true;
+            }
 
             int index = harita - 1;
             int largeursDecalage = 0;

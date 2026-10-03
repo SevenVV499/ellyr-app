@@ -344,6 +344,7 @@ public static class CopperWire
         }
         _actionMapId = snapshot.Joueur.Harita;
         _hasActionMap = true;
+        RefreshSpecialMapBounds(player, snapshot.Joueur.Harita);
 
         bool fleeEnded;
         bool fleeing = SurvivalWire.Tick(player, snapshot, out fleeEnded);
@@ -1260,7 +1261,8 @@ public static class CopperWire
             || maxX <= minX || maxY <= minY)
             return false;
 
-        for (int attempt = 0; attempt < 8; attempt++)
+        int attempts = PositionReelle.EstCarteSpeciale(mapId) ? 24 : 8;
+        for (int attempt = 0; attempt < attempts; attempt++)
         {
             float x = UnityEngine.Random.Range(minX, maxX);
             float y = UnityEngine.Random.Range(minY, maxY);
@@ -1294,7 +1296,7 @@ public static class CopperWire
 
     // Distance maximale entre un point demandé et le nœud A* le plus proche pour le
     // considérer comme navigable (un peu plus que la taille d'une case de grille).
-    private const float WalkableTolerance = 3f;
+    private const float WalkableTolerance = 1.5f;
     private static int _astarRejectLogged;
 
     // Vrai si le point est sur, ou très près d'un nœud praticable du graphe A*.
@@ -1333,66 +1335,75 @@ public static class CopperWire
         }
     }
 
-    private static bool _astarStateLogged;
+    private static int _boundsMapId;
 
-    // Relevé temporaire, une fois : état du graphe A* sur la carte spéciale.
-    private static void LogAstarState(Player player)
+    // Carte spéciale : prend les limites du graphe A* (GridGraph) qui contient le navire.
+    // Chaque graphe correspond à une carte ; son emprise est centre +/- (taille * pas) / 2.
+    // Si aucun graphe n'est trouvé, la règle de KoordinatGetir reste en vigueur.
+    private static void RefreshSpecialMapBounds(Player player, int mapId)
     {
-        if (_astarStateLogged)
+        if (!PositionReelle.EstCarteSpeciale(mapId) || _boundsMapId == mapId)
             return;
-        _astarStateLogged = true;
+        _boundsMapId = mapId;
 
         try
         {
             AstarPath astar = AstarPath.active;
             if (astar == null)
             {
-                Plugin.Logger.LogInfo("[Carte spéciale] A* : AstarPath.active est nul.");
+                Plugin.Logger.LogInfo("[Carte spéciale] A* : AstarPath.active est nul, règle de décalage conservée.");
                 return;
             }
 
+            Vector3 position = player.transform.position;
             var graphs = astar.graphs;
             int count = graphs == null ? 0 : graphs.Length;
-            Plugin.Logger.LogInfo("[Carte spéciale] A* : " + count + " graphe(s).");
+            float bestDistance = float.MaxValue;
+            float bestCx = 0f, bestCy = 0f, bestHalf = 0f;
+            bool found = false;
             for (int i = 0; i < count; i++)
             {
                 var graph = graphs[i];
                 if (graph == null)
                     continue;
-
                 Pathfinding.GridGraph grid = graph.TryCast<Pathfinding.GridGraph>();
                 if (grid == null)
-                {
-                    Plugin.Logger.LogInfo("[Carte spéciale] A* graphe " + i + " : type autre qu'un GridGraph.");
                     continue;
-                }
 
                 Vector3 center = grid.center;
-                Vector3 rotation = grid.rotation;
-                Plugin.Logger.LogInfo(
-                    "[Carte spéciale] A* graphe " + i + " : GridGraph centre ("
-                    + center.x.ToString("0.##", CultureInfo.InvariantCulture) + ", "
-                    + center.y.ToString("0.##", CultureInfo.InvariantCulture) + ", "
-                    + center.z.ToString("0.##", CultureInfo.InvariantCulture) + ") largeur " + grid.width
-                    + " profondeur " + grid.depth + " taille nœud "
-                    + grid.nodeSize.ToString("0.##", CultureInfo.InvariantCulture) + " rotation ("
-                    + rotation.x.ToString("0.##", CultureInfo.InvariantCulture) + ", "
-                    + rotation.y.ToString("0.##", CultureInfo.InvariantCulture) + ", "
-                    + rotation.z.ToString("0.##", CultureInfo.InvariantCulture) + ")");
+                float half = Math.Max(grid.width, grid.depth) * grid.nodeSize * 0.5f;
+                float distance = Math.Max(
+                    Math.Abs(position.x - center.x), Math.Abs(position.y - center.y));
+                if (distance > half + 1f || distance >= bestDistance)
+                    continue;
+
+                bestDistance = distance;
+                bestCx = center.x;
+                bestCy = center.y;
+                bestHalf = half;
+                found = true;
             }
 
-            Vector3 position = player.transform.position;
-            Pathfinding.NNInfo info = astar.GetNearest(position);
-            Pathfinding.GraphNode node = info.node;
+            if (!found)
+            {
+                Plugin.Logger.LogInfo(
+                    "[Carte spéciale] A* : aucun graphe ne contient le navire (" + count
+                    + " graphes), règle de décalage conservée.");
+                return;
+            }
+
+            PositionReelle.DefinirLimitesObservees(
+                mapId, bestCx - bestHalf, bestCx + bestHalf, bestCy - bestHalf, bestCy + bestHalf);
             Plugin.Logger.LogInfo(
-                "[Carte spéciale] A* nœud le plus proche du navire : "
-                + (node == null
-                    ? "aucun"
-                    : "praticable=" + node.Walkable + " zone=" + node.Area));
+                "[Carte spéciale] Carte " + mapId + " : limites prises du graphe A* X ["
+                + (bestCx - bestHalf).ToString("0.##", CultureInfo.InvariantCulture) + " ; "
+                + (bestCx + bestHalf).ToString("0.##", CultureInfo.InvariantCulture) + "] Y ["
+                + (bestCy - bestHalf).ToString("0.##", CultureInfo.InvariantCulture) + " ; "
+                + (bestCy + bestHalf).ToString("0.##", CultureInfo.InvariantCulture) + "].");
         }
         catch (Exception e)
         {
-            Plugin.Logger.LogError("[Carte spéciale] relevé A* échoué : " + e);
+            Plugin.Logger.LogError("[Carte spéciale] relevé des limites A* échoué : " + e);
         }
     }
 
@@ -1482,7 +1493,6 @@ public static class CopperWire
 
         try
         {
-            LogAstarState(player);
             if (!_worldMoveLogged)
             {
                 _worldMoveLogged = true;
