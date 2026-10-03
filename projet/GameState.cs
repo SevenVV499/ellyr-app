@@ -240,6 +240,7 @@ namespace EtatJoueurMod
             int Vie(NetworkBehaviour nb);
             int VieMax(NetworkBehaviour nb);
             float Portee(NetworkBehaviour nb);
+            int Carte(NetworkBehaviour nb);
         }
 
         private sealed class PnjLecteur<T> : IPnjLecteur where T : NetworkBehaviour
@@ -248,11 +249,20 @@ namespace EtatJoueurMod
             private readonly Func<T, int> _vie;
             private readonly Func<T, int> _vieMax;
             private readonly Func<T, float> _portee;
+            private readonly Func<T, int> _carte;
 
-            public PnjLecteur(Func<T, string> nom, Func<T, int> vie, Func<T, int> vieMax, Func<T, float> portee)
+            public PnjLecteur(
+                Func<T, string> nom,
+                Func<T, int> vie,
+                Func<T, int> vieMax,
+                Func<T, float> portee,
+                Func<T, int> carte)
             {
-                _nom = nom; _vie = vie; _vieMax = vieMax; _portee = portee;
+                _nom = nom; _vie = vie; _vieMax = vieMax; _portee = portee; _carte = carte;
             }
+
+            // Numéro de carte lu dans le composant du PNJ (0 si ce type n'a pas ce champ).
+            public int Carte(NetworkBehaviour nb) => _carte == null ? 0 : _carte(nb.TryCast<T>());
 
             public string Nom(NetworkBehaviour nb) => _nom(nb.TryCast<T>());
             public int Vie(NetworkBehaviour nb) => _vie(nb.TryCast<T>());
@@ -279,6 +289,9 @@ namespace EtatJoueurMod
 
         private static long _dernierTirCanonSequence;
         private static uint _dernierTirCanonCibleNetId;
+
+        private static int _versionLimitesVue;
+        private static int _carteEcartsLogues;
 
         private static readonly Dictionary<uint, CacheEntree> _cachePnj = new Dictionary<uint, CacheEntree>();
         private static readonly HashSet<uint> _idsPnjVus = new HashSet<uint>();
@@ -746,12 +759,12 @@ namespace EtatJoueurMod
             liste.Add(CreerClassifieurPnj<IceAllMonsters>("monstre", p => p.geminame, p => p.Can, p => p.MaksCan, p => 0f));
             liste.Add(CreerClassifieurPnj<SampiyonAllMonsters>("monstre", p => p.geminame, p => p.Can, p => p.MaksCan, p => 0f));
             liste.Add(CreerClassifieurPnj<MonsterAdmiral>("boss", p => p.geminame, p => p.Can, p => p.MaksCan, p => 0f));
-            liste.Add(CreerClassifieurPnj<AllNpcs>("npc_navire", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<AllNpcs>("npc_navire", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
             liste.Add(CreerClassifieurPnj<BonusMapAllNpcs>("npc_navire", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
             liste.Add(CreerClassifieurPnj<BaronAdmiral>("boss", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
             liste.Add(CreerClassifieurPnj<DragonAdmiral>("boss", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
-            liste.Add(CreerClassifieurPnj<EventShip>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
-            liste.Add(CreerClassifieurPnj<BaronShip>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EventShip>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil, p => p.Map));
+            liste.Add(CreerClassifieurPnj<BaronShip>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil, p => p.Map));
             liste.Add(CreerClassifieurPnj<BaronEtkinlikShip>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
             liste.Add(CreerClassifieurPnj<EtkinlikAnaGemileri>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
             liste.Add(CreerClassifieurPnj<EtkinlikAnaGemileriBonus>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
@@ -760,19 +773,19 @@ namespace EtatJoueurMod
             liste.Add(CreerClassifieurPnj<EtkinlikAnaGemileriPaskalya>("npc_navire_event", p => p.NpcName, p => p.Health, p => p.MaxCan, p => p.menzil));
             liste.Add(CreerClassifieurPnj<MiniEventShip>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
             liste.Add(CreerClassifieurPnj<RaidProKucuk>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemileri>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemileriBonus>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemileriKorsan>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemileriMagellan>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiCalypso>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiHel>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiIce>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiIcePearl>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiKaplumbaga>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiMagellan>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiSampiyon>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiValentin>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
-            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiOzgurluk>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemileri>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemileriBonus>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemileriKorsan>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemileriMagellan>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiCalypso>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiHel>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiIce>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiIcePearl>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiKaplumbaga>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiMagellan>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiSampiyon>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiValentin>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
+            liste.Add(CreerClassifieurPnj<EtkinlikKucukGemiOzgurluk>("npc_navire_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => p.menzil, p => p.HaritaKac));
             liste.Add(CreerClassifieurPnj<KuleKontrol>("tour_event", p => p.geminame, p => p.Can, p => p.MaxCan, p => 0f));
                 _classifieursPnj = liste;
             }
@@ -792,11 +805,12 @@ namespace EtatJoueurMod
             Func<T, string> nom,
             Func<T, int> vie,
             Func<T, int> vieMax,
-            Func<T, float> portee)
+            Func<T, float> portee,
+            Func<T, int> carte = null)
             where T : NetworkBehaviour
         {
             if (LecteurCache<T>.Valeur == null)
-                LecteurCache<T>.Valeur = new PnjLecteur<T>(nom, vie, vieMax, portee);
+                LecteurCache<T>.Valeur = new PnjLecteur<T>(nom, vie, vieMax, portee, carte);
             IPnjLecteur lecteur = LecteurCache<T>.Valeur;
             Il2CppSystem.Type componentType = (Il2CppSystem.Type)Il2CppType.Of<T>();
             string nomType = typeof(T).Name;
@@ -1083,7 +1097,8 @@ namespace EtatJoueurMod
             if (_nomsHarita.TryGetValue(harita, out string nomMemorise)) return nomMemorise;
 
             string nom = AppelerHaritaAdiniGetirNatif(harita) ?? CalculerNomHaritaOrdinaire(harita);
-            _nomsHarita[harita] = nom;
+            if (!string.IsNullOrEmpty(nom))
+                _nomsHarita[harita] = nom;
             return nom;
         }
 
@@ -1420,6 +1435,12 @@ namespace EtatJoueurMod
 
             PnjsProches.RemoveAll(p => p.Instance == null);
 
+            if (PositionReelle.VersionLimites != _versionLimitesVue)
+            {
+                _versionLimitesVue = PositionReelle.VersionLimites;
+                _cachePnj.Clear();
+            }
+
             _idsPnjVus.Clear();
             int index = 0;
 
@@ -1430,6 +1451,7 @@ namespace EtatJoueurMod
                 string nom;
                 int vie, vieMax;
                 float portee;
+                int carteChamp;
                 try
                 {
                     pp = p.Instance.transform.position;
@@ -1438,6 +1460,7 @@ namespace EtatJoueurMod
                     vie = p.Lecteur.Vie(p.Instance);
                     vieMax = p.Lecteur.VieMax(p.Instance);
                     portee = p.Lecteur.Portee(p.Instance);
+                    carteChamp = p.Lecteur.Carte(p.Instance);
                 }
                 catch { continue; }
 
@@ -1450,9 +1473,22 @@ namespace EtatJoueurMod
                 float refX = cache.RefX, refY = cache.RefY;
                 if (!connu
                     || Math.Abs(pp.x - cache.RefX) > SeuilDeplacement
-                    || Math.Abs(pp.y - cache.RefY) > SeuilDeplacement)
+                    || Math.Abs(pp.y - cache.RefY) > SeuilDeplacement
+                    || (carteChamp > 0 && carteChamp != cache.Harita))
                 {
-                    harita = PositionReelle.TrouverHarita(pp.x, pp.y);
+                    // Le champ de carte du composant fait foi quand il existe ; sinon on
+                    // retrouve la carte d'après la position.
+                    int carteGeo = PositionReelle.TrouverHarita(pp.x, pp.y);
+                    harita = carteChamp > 0 ? carteChamp : carteGeo;
+                    if (carteChamp > 0 && carteGeo != carteChamp && _carteEcartsLogues < 10)
+                    {
+                        _carteEcartsLogues++;
+                        Plugin.Logger.LogInfo(
+                            "[Carte PNJ] " + nom + " (" + p.Type + ") : champ de carte = " + carteChamp
+                            + ", d'après la position = " + carteGeo + " (x "
+                            + pp.x.ToString("0.##", CultureInfo.InvariantCulture) + ", y "
+                            + pp.y.ToString("0.##", CultureInfo.InvariantCulture) + ").");
+                    }
                     SeparerPositionNative(harita > 0 ? ObtenirPositionNative(harita, pp.x, pp.y) : null, out sayi, out harf);
                     refX = pp.x;
                     refY = pp.y;
@@ -1578,10 +1614,15 @@ namespace EtatJoueurMod
         private static readonly Dictionary<int, float[]> _limitesObservees =
             new Dictionary<int, float[]>();
 
+        // Incrémentée quand des limites observées changent : le cache de carte des PNJ,
+        // calculé avec les anciennes limites, doit alors être recalculé.
+        public static int VersionLimites { get; private set; }
+
         public static void DefinirLimitesObservees(
             int harita, float minX, float maxX, float minY, float maxY)
         {
             _limitesObservees[harita] = new[] { minX, maxX, minY, maxY };
+            VersionLimites++;
         }
 
         public static bool ALimitesObservees(int harita)
