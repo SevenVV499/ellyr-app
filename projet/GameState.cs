@@ -291,7 +291,6 @@ namespace EtatJoueurMod
         private static uint _dernierTirCanonCibleNetId;
 
         private static int _versionLimitesVue;
-        private static int _carteEcartsLogues;
 
         private static readonly Dictionary<uint, CacheEntree> _cachePnj = new Dictionary<uint, CacheEntree>();
         private static readonly HashSet<uint> _idsPnjVus = new HashSet<uint>();
@@ -1482,17 +1481,7 @@ namespace EtatJoueurMod
                 {
                     // Le champ de carte du composant fait foi quand il existe ; sinon on
                     // retrouve la carte d'après la position.
-                    int carteGeo = PositionReelle.TrouverHarita(pp.x, pp.y);
-                    harita = carteChamp > 0 ? carteChamp : carteGeo;
-                    if (carteChamp > 0 && carteGeo != carteChamp && _carteEcartsLogues < 10)
-                    {
-                        _carteEcartsLogues++;
-                        Plugin.Logger.LogInfo(
-                            "[Carte PNJ] " + nom + " (" + p.Type + ") : champ de carte = " + carteChamp
-                            + ", d'après la position = " + carteGeo + " (x "
-                            + pp.x.ToString("0.##", CultureInfo.InvariantCulture) + ", y "
-                            + pp.y.ToString("0.##", CultureInfo.InvariantCulture) + ").");
-                    }
+                    harita = carteChamp > 0 ? carteChamp : PositionReelle.TrouverHarita(pp.x, pp.y);
                     SeparerPositionNative(harita > 0 ? ObtenirPositionNative(harita, pp.x, pp.y) : null, out sayi, out harf);
                     refX = pp.x;
                     refY = pp.y;
