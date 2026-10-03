@@ -508,15 +508,11 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         GUILayout.Label("PV " + pnj.Vie + " / " + pnj.VieMax, _sValue, GUILayout.Width(150f));
         GUILayout.EndHorizontal();
 
-        string carte = pnj.Harita > 0
-            ? pnj.Harita + (string.IsNullOrEmpty(pnj.NomHarita) ? string.Empty : " / " + pnj.NomHarita)
-            : "inconnue";
+        string carte = !string.IsNullOrEmpty(pnj.NomHarita)
+            ? pnj.NomHarita
+            : pnj.Harita > 0 ? "carte " + pnj.Harita : "carte inconnue";
         GUILayout.Label(
-            pnj.Type
-            + "  |  carte " + carte
-            + "  |  " + (pnj.CoordonneeSayi ?? "?") + " " + (pnj.CoordonneeHarf ?? "?")
-            + " (monde " + FormatNumber(pnj.X) + ", " + FormatNumber(pnj.Y) + ")"
-            + "  |  distance " + FormatNumber(pnj.Distance),
+            carte + "  |  " + (pnj.CoordonneeSayi ?? "?") + " " + (pnj.CoordonneeHarf ?? "?"),
             _sMuted);
         GUILayout.EndVertical();
         GUILayout.Space(4f);
