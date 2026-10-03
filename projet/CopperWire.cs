@@ -1276,6 +1276,12 @@ public static class CopperWire
                     new Vector2(x, y)) < 5f)
                 continue;
 
+            // Cartes spéciales : la zone jouable n'est pas celle du rectangle calculé
+            // (ligne orange de la carte de raid). On écarte les points hors du graphe A*.
+            if (PositionReelle.EstCarteSpeciale(mapId)
+                && !IsWalkableDestination(new Vector3(x, y, current.z)))
+                continue;
+
             if (!IssueMove(player, mapId, x, y))
                 continue;
 
@@ -1284,6 +1290,110 @@ public static class CopperWire
             return true;
         }
         return false;
+    }
+
+    // Distance maximale entre un point demandé et le nœud A* le plus proche pour le
+    // considérer comme navigable (un peu plus que la taille d'une case de grille).
+    private const float WalkableTolerance = 3f;
+    private static int _astarRejectLogged;
+
+    // Vrai si le point est sur, ou très près d'un nœud praticable du graphe A*.
+    // Sans graphe actif ou en cas d'erreur, aucun filtre n'est appliqué.
+    private static bool IsWalkableDestination(Vector3 point)
+    {
+        try
+        {
+            AstarPath astar = AstarPath.active;
+            if (astar == null)
+                return true;
+
+            Pathfinding.NNInfo info = astar.GetNearest(point);
+            Pathfinding.GraphNode node = info.node;
+            Vector3 nearest = info.position;
+            bool walkable = node != null
+                && node.Walkable
+                && Vector2.Distance(
+                    new Vector2(nearest.x, nearest.y),
+                    new Vector2(point.x, point.y)) <= WalkableTolerance;
+
+            if (!walkable && _astarRejectLogged < 5)
+            {
+                _astarRejectLogged++;
+                Plugin.Logger.LogInfo(
+                    "[Carte spéciale] destination (" + point.x.ToString("0.##", CultureInfo.InvariantCulture)
+                    + ", " + point.y.ToString("0.##", CultureInfo.InvariantCulture)
+                    + ") écartée par A* : nœud "
+                    + (node == null ? "absent" : node.Walkable ? "praticable mais trop loin" : "non praticable"));
+            }
+            return walkable;
+        }
+        catch (Exception)
+        {
+            return true;
+        }
+    }
+
+    private static bool _astarStateLogged;
+
+    // Relevé temporaire, une fois : état du graphe A* sur la carte spéciale.
+    private static void LogAstarState(Player player)
+    {
+        if (_astarStateLogged)
+            return;
+        _astarStateLogged = true;
+
+        try
+        {
+            AstarPath astar = AstarPath.active;
+            if (astar == null)
+            {
+                Plugin.Logger.LogInfo("[Carte spéciale] A* : AstarPath.active est nul.");
+                return;
+            }
+
+            var graphs = astar.graphs;
+            int count = graphs == null ? 0 : graphs.Length;
+            Plugin.Logger.LogInfo("[Carte spéciale] A* : " + count + " graphe(s).");
+            for (int i = 0; i < count; i++)
+            {
+                var graph = graphs[i];
+                if (graph == null)
+                    continue;
+
+                Pathfinding.GridGraph grid = graph.TryCast<Pathfinding.GridGraph>();
+                if (grid == null)
+                {
+                    Plugin.Logger.LogInfo("[Carte spéciale] A* graphe " + i + " : type autre qu'un GridGraph.");
+                    continue;
+                }
+
+                Vector3 center = grid.center;
+                Vector3 rotation = grid.rotation;
+                Plugin.Logger.LogInfo(
+                    "[Carte spéciale] A* graphe " + i + " : GridGraph centre ("
+                    + center.x.ToString("0.##", CultureInfo.InvariantCulture) + ", "
+                    + center.y.ToString("0.##", CultureInfo.InvariantCulture) + ", "
+                    + center.z.ToString("0.##", CultureInfo.InvariantCulture) + ") largeur " + grid.width
+                    + " profondeur " + grid.depth + " taille nœud "
+                    + grid.nodeSize.ToString("0.##", CultureInfo.InvariantCulture) + " rotation ("
+                    + rotation.x.ToString("0.##", CultureInfo.InvariantCulture) + ", "
+                    + rotation.y.ToString("0.##", CultureInfo.InvariantCulture) + ", "
+                    + rotation.z.ToString("0.##", CultureInfo.InvariantCulture) + ")");
+            }
+
+            Vector3 position = player.transform.position;
+            Pathfinding.NNInfo info = astar.GetNearest(position);
+            Pathfinding.GraphNode node = info.node;
+            Plugin.Logger.LogInfo(
+                "[Carte spéciale] A* nœud le plus proche du navire : "
+                + (node == null
+                    ? "aucun"
+                    : "praticable=" + node.Walkable + " zone=" + node.Area));
+        }
+        catch (Exception e)
+        {
+            Plugin.Logger.LogError("[Carte spéciale] relevé A* échoué : " + e);
+        }
     }
 
     private static bool IssueMove(Player player, int mapId, float x, float y)
@@ -1372,6 +1482,7 @@ public static class CopperWire
 
         try
         {
+            LogAstarState(player);
             if (!_worldMoveLogged)
             {
                 _worldMoveLogged = true;
