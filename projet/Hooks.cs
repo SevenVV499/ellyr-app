@@ -497,11 +497,11 @@ namespace EtatJoueurMod
             return true;
         }
 
+        // Le jeu appelle cette commande pour tous les joueurs proches ; Mirror la refuse (et
+        // journalise « without authority ») pour ceux qui ne sont pas locaux. Bloquée en
+        // permanence, bot lancé ou non : l'appel n'aurait aucun effet de toute façon.
         public static bool Prefix(Player __instance)
         {
-            if (!CopperWire.AutomationEnabled)
-                return true;
-
             if (__instance == null) return true;
             if (__instance.isLocalPlayer) return true;
 
