@@ -38,7 +38,7 @@ namespace EtatJoueurMod
         private static readonly Dictionary<string, ConfigEntry<bool>> CollectibleTypeSettings =
             new Dictionary<string, ConfigEntry<bool>>(StringComparer.Ordinal);
         private static Il2CppSystem.Action _targetCatalogDisconnectHandler;
-        private const int BackgroundTargetFrameRate = 60;
+        private const int BackgroundTargetFrameRate = 20;
         private static Action<bool> _focusChangedHandler;
         private static int _foregroundTargetFrameRate = -1;
         private static int _foregroundVSyncCount;

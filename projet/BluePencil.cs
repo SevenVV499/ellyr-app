@@ -147,8 +147,6 @@ public sealed class BluePencil
     private readonly HashSet<uint> _confirmedCollectibles = new HashSet<uint>();
     private readonly HashSet<uint> _skippedCollectiblesUntilHidden = new HashSet<uint>();
     private readonly List<uint> _skippedCollectiblesToRemove = new List<uint>();
-    private readonly HashSet<uint> _loggedNoKeyCollectibles = new HashSet<uint>();
-    private readonly List<uint> _loggedNoKeyCollectiblesToRemove = new List<uint>();
     private readonly HashSet<uint> _excludedMonsterTargets = new HashSet<uint>();
     private readonly List<uint> _excludedMonsterTargetsToRemove = new List<uint>();
     private Func<PnjInfo, bool> _allowPnj;
@@ -345,8 +343,6 @@ public sealed class BluePencil
         _confirmedCollectibles.Clear();
         _skippedCollectiblesUntilHidden.Clear();
         _skippedCollectiblesToRemove.Clear();
-        _loggedNoKeyCollectibles.Clear();
-        _loggedNoKeyCollectiblesToRemove.Clear();
         _excludedMonsterTargets.Clear();
         _excludedMonsterTargetsToRemove.Clear();
         _hasMap = false;
@@ -381,16 +377,12 @@ public sealed class BluePencil
             || confirmation == CollectConfirmationState.CallbackExecuted)
         {
             _confirmedCollectibles.Add(context.NetId);
-            string confirmationSource = confirmation == CollectConfirmationState.Confirmed
-                ? "Callback+Reward"
-                : "TargetCallback";
             _brain.CompleteCurrent();
             return false;
         }
 
         if (!HasRequiredCollectibleKey(context.Type, snapshot.Joueur))
         {
-            _loggedNoKeyCollectibles.Add(context.NetId);
             _brain.CancelCurrent();
             return false;
         }
@@ -473,9 +465,6 @@ public sealed class BluePencil
                 continue;
             if (!HasRequiredCollectibleKey(item.Type, snapshot.Joueur))
             {
-                if (_loggedNoKeyCollectibles.Add(item.Id))
-                {
-                }
                 continue;
             }
             if (best == null || item.Distance < best.Distance)
@@ -486,7 +475,6 @@ public sealed class BluePencil
 
     private void PurgeSkippedCollectiblesNoLongerVisible(EtatJeuSnapshot snapshot)
     {
-        PurgeLoggedNoKeyCollectibles(snapshot);
         if (_skippedCollectiblesUntilHidden.Count == 0)
             return;
 
@@ -503,24 +491,6 @@ public sealed class BluePencil
             _skippedCollectiblesUntilHidden.Remove(netId);
         }
         _skippedCollectiblesToRemove.Clear();
-    }
-
-    private void PurgeLoggedNoKeyCollectibles(EtatJeuSnapshot snapshot)
-    {
-        if (_loggedNoKeyCollectibles.Count == 0)
-            return;
-
-        _loggedNoKeyCollectiblesToRemove.Clear();
-        foreach (uint netId in _loggedNoKeyCollectibles)
-        {
-            CollectibleInfo visible = FindCollectible(snapshot, netId);
-            if (visible == null || HasRequiredCollectibleKey(visible.Type, snapshot.Joueur))
-                _loggedNoKeyCollectiblesToRemove.Add(netId);
-        }
-
-        for (int i = 0; i < _loggedNoKeyCollectiblesToRemove.Count; i++)
-            _loggedNoKeyCollectibles.Remove(_loggedNoKeyCollectiblesToRemove[i]);
-        _loggedNoKeyCollectiblesToRemove.Clear();
     }
 
     private static bool HasRequiredCollectibleKey(string collectibleType, FicheJoueur player)

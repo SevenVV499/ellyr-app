@@ -84,7 +84,6 @@ public static class RaidWire
     private static float _phaseStartedAt;
     private static float _cooldownUntil;
     private static int _attempt;
-    private static int _counterBefore;
     private static int _blockedMap;
 
     public static bool IsActive
@@ -229,7 +228,6 @@ public static class RaidWire
                     return false;
                 _spec = levelSpec;
                 _attempt = 1;
-                _counterBefore = Counter(joueur, levelSpec);
                 _phase = Phase.Settling;
                 _phaseStartedAt = now;
                 return true;

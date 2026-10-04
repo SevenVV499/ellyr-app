@@ -349,7 +349,6 @@ namespace EtatJoueurMod
     public static class Patch_NetworkIdentity_HandleRemoteCall
     {
 
-        private const int MaxHashInconnusLogues = 30;
         private const int SeuilAlerteSansSucces = 50;
 
         private sealed class Stat
@@ -362,9 +361,6 @@ namespace EtatJoueurMod
         private static readonly object _verrou = new object();
         private static readonly System.Collections.Generic.Dictionary<string, Stat> _stats =
             new System.Collections.Generic.Dictionary<string, Stat>();
-        private static readonly System.Collections.Generic.HashSet<(string, ushort)> _inconnusLogues =
-            new System.Collections.Generic.HashSet<(string, ushort)>();
-        private static int _premierAppel;
 
         // Les hashes hors récompense ne sont examinés qu'une fois sur 32 : cela garde
         // les statistiques de diagnostic (hash périmé) sans payer le coût de résolution
@@ -484,8 +480,6 @@ namespace EtatJoueurMod
     [HarmonyPatch(typeof(Player), "guverteleraktifMojo")]
     public static class Patch_Player_GuverteleraktifMojo
     {
-        private static int _nbBloques;
-
         [HarmonyPrepare]
         public static bool Prepare()
         {

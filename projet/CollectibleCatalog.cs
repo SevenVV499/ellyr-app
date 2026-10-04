@@ -9,22 +9,26 @@ namespace EtatJoueurMod
     public static class CollectibleCatalog
     {
         private static readonly object Sync = new object();
-        private static IReadOnlyList<Type> _collectibleTypes = Array.AsReadOnly(Array.Empty<Type>());
+        // volatile : lu à chaque image sans verrou ; les écritures restent sous verrou.
+        private static volatile IReadOnlyList<Type> _collectibleTypes = Array.AsReadOnly(Array.Empty<Type>());
         private static HashSet<Type> _collectibleTypeSet = new HashSet<Type>();
-        private static bool _initialized;
+        private static volatile bool _initialized;
 
         public static bool IsInitialized
         {
-            get { lock (Sync) return _initialized; }
+            get { return _initialized; }
         }
 
         public static IReadOnlyList<Type> CollectibleTypes
         {
-            get { lock (Sync) return _collectibleTypes; }
+            get { return _collectibleTypes; }
         }
 
         public static void Initialize()
         {
+            if (_initialized)
+                return;
+
             lock (Sync)
             {
                 if (_initialized)

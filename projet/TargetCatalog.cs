@@ -55,6 +55,9 @@ namespace EtatJoueurMod
 
         public static void Initialize()
         {
+            if (_isInitialized)
+                return;
+
             lock (Gate)
             {
                 if (_isInitialized || !NetworkClient.active || !NetworkClient.ready)

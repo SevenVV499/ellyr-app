@@ -60,6 +60,9 @@ namespace EtatJoueurMod
 
         public static void Initialize(Player player)
         {
+            if (_isInitialized)
+                return;
+
             lock (Gate)
             {
                 if (_isInitialized || player == null || !player.isLocalPlayer

@@ -1419,8 +1419,6 @@ public static class CopperWire
     // donner l'ordre (ses tables natives n'ont pas ces cartes). On reproduit ce qu'il fait
     // sur les autres cartes à partir de coordonnées du monde : destination locale du
     // déplacement, puis la commande Sunucugemigezdir(Vector3).
-    private static bool _worldMoveLogged;
-
     private static bool IssueMoveToCellWorld(Player player, int column, string row, string cell)
     {
         if (cell == _lastMoveCell)
@@ -1447,11 +1445,6 @@ public static class CopperWire
 
         try
         {
-            if (!_worldMoveLogged)
-            {
-                _worldMoveLogged = true;
-            }
-
             if (player.aiLerp != null)
             {
                 player.aiLerp.isStopped = false;
@@ -1493,10 +1486,6 @@ public static class CopperWire
                 // Les tables natives de HedefeGit ne couvrent pas toutes les cartes
                 // (deux d'entre elles n'ont que 31 entrées) : il sort alors sans donner
                 // l'ordre. On reprend par les coordonnées du monde, comme un clic.
-                if (!_hedefeGitFallbackLogged)
-                {
-                    _hedefeGitFallbackLogged = true;
-                }
                 return IssueMoveToCellWorld(player, column, row, cell);
             }
 
@@ -1509,8 +1498,6 @@ public static class CopperWire
             return false;
         }
     }
-
-    private static bool _hedefeGitFallbackLogged;
 
     // Vrai si la destination locale du déplacement est bien celle de la case demandée
     // (à deux cases près). En cas de doute, ou si la grille de la carte est inconnue,
