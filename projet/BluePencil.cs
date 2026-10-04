@@ -635,7 +635,7 @@ public sealed class BluePencil
                 // nom absent du catalogue, ou présent des deux côtés, n'est jamais
                 // engagé : on ne devine ni l'arme ni la portée à utiliser.
                 TargetCategory weaponCategory;
-                if (!TargetCatalog.TryGetCategory(pnj.Nom, out weaponCategory))
+                if (!ResolveWeaponCategory(pnj, out weaponCategory))
                     continue;
                 if (weaponCategory == TargetCategory.Monster
                     && _excludedMonsterTargets.Contains(pnj.Id))
@@ -852,7 +852,7 @@ public sealed class BluePencil
 
                 // A target that is no longer classifiable is invalid and is abandoned.
                 TargetCategory weaponCategory;
-                if (!TargetCatalog.TryGetCategory(pnj.Nom, out weaponCategory))
+                if (!ResolveWeaponCategory(pnj, out weaponCategory))
                     return null;
 
                 return new CombatTarget
@@ -948,6 +948,27 @@ public sealed class BluePencil
                 return true;
         }
         return false;
+    }
+
+    /*
+     * Catégorie d'arme d'une cible. Le catalogue reste la référence ; seule exception : une
+     * cible de Raid (liste interne) absente du catalogue (typiquement un boss de type navire
+     * d'événement) est classée d'après sa classe de jeu, comme le fait le catalogue lui-même
+     * (nom de type contenant « Monster » ou catégorie « monstre » = Monster, sinon Npc).
+     */
+    private bool ResolveWeaponCategory(PnjInfo pnj, out TargetCategory category)
+    {
+        if (TargetCatalog.TryGetCategory(pnj.Nom, out category))
+            return true;
+
+        if (_raidAllowPnj == null || !_raidAllowPnj(pnj))
+            return false;
+
+        bool monster = string.Equals(pnj.Categorie, "monstre", StringComparison.Ordinal)
+            || !string.IsNullOrEmpty(pnj.Type)
+            && pnj.Type.IndexOf("Monster", StringComparison.OrdinalIgnoreCase) >= 0;
+        category = monster ? TargetCategory.Monster : TargetCategory.Npc;
+        return true;
     }
 
     private bool PriorityPreemptsActiveCombat(EtatJeuSnapshot snapshot, BehaviorAction active)

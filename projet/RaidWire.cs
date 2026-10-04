@@ -355,8 +355,12 @@ public static class RaidWire
             bool match = IsRaidTarget(pnj);
             if (match)
                 matches++;
+            TargetCategory catalogCategory;
             string key = (pnj.Nom ?? "?") + " [" + (pnj.Categorie ?? "?") + "/" + (pnj.Type ?? "?") + "]"
-                + (match ? " *cible*" : string.Empty);
+                + (match
+                    ? " *cible* catalogue=" + (TargetCatalog.TryGetCategory(pnj.Nom, out catalogCategory)
+                        ? catalogCategory.ToString() : "absent")
+                    : string.Empty);
             if (seen.Add(key))
                 text.Append(seen.Count > 1 ? " ; " : string.Empty).Append(key);
         }
