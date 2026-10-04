@@ -509,6 +509,49 @@ namespace EtatJoueurMod
         }
     }
 
+    // Le jeu envoie la commande guverteleraktifMojo directement depuis Player.Update
+    // (SendCommandInternal, hash 0x21EE0C97), sans passer par le wrapper de la Command :
+    // le patch ci-dessus ne la voit donc pas. Mirror refuse l'envoi pour tout joueur non
+    // local et journalise « without authority » à chaque image. On saute l'envoi pour eux,
+    // en comparant d'abord le hash (test entier, aucun surcoût pour les autres commandes).
+    [HarmonyPatch(typeof(NetworkBehaviour), "SendCommandInternal")]
+    public static class Patch_NetworkBehaviour_SendCommandInternal
+    {
+        private const int HashGuverteleraktifMojo = 0x21EE0C97;
+
+        [HarmonyPrepare]
+        public static bool Prepare()
+        {
+            MethodInfo methode = Hooks.TrouverMethodeUnique(typeof(NetworkBehaviour), "SendCommandInternal");
+            if (methode == null)
+                return false;
+
+            ParameterInfo[] p = methode.GetParameters();
+            if (methode.ReturnType != typeof(void) || p.Length < 2 || p[1].ParameterType != typeof(int))
+            {
+                Plugin.Logger.LogError(
+                    "[EtatJoueur] NetworkBehaviour.SendCommandInternal : signature inattendue, patch désactivé.");
+                return false;
+            }
+            return true;
+        }
+
+        public static bool Prefix(NetworkBehaviour __instance, int __1)
+        {
+            if (__1 != HashGuverteleraktifMojo)
+                return true;
+
+            try
+            {
+                return __instance == null || __instance.isLocalPlayer;
+            }
+            catch
+            {
+                return true;
+            }
+        }
+    }
+
     // Clic sur la mer (déplacement manuel) : la console est dessinée en IMGUI, qui ne
     // bloque pas les clics lus par le jeu. Tant que le pointeur est sur la console, le
     // gestionnaire de clic du jeu est donc sauté.
