@@ -364,26 +364,88 @@ public static class RaidWire
             if (seen.Add(key))
                 text.Append(seen.Count > 1 ? " ; " : string.Empty).Append(key);
         }
+        Plugin.Logger.LogInfo("[RaidWire] Entrées du catalogue reconnues comme cibles de Raid : "
+            + string.Join(" ; ", new List<string>(CatalogKeys().Keys).ToArray()));
         Plugin.Logger.LogInfo("[RaidWire] Cibles vues (" + matches + " retenues) : " + text);
     }
 
     /*
-     * Clé canonique d'un nom de cible de Raid (sans accents ni majuscules), ou null si le nom
-     * n'appartient à aucune des deux Raids. Sert à exclure ces cibles de l'onglet Cibles et à
-     * retrouver la munition choisie dans l'onglet Carte Raid, quelle que soit l'orthographe du jeu.
+     * Le catalogue de cibles fait foi pour l'orthographe. Les quatre mots-clés ci-dessous ne
+     * servent qu'à repérer, dans le catalogue, les entrées qui sont des cibles de Raid ; ensuite
+     * seuls les noms exacts du catalogue sont reconnus (avant l'initialisation du catalogue,
+     * le mot-clé seul fait office de nom).
+     */
+    private static readonly string[] Keywords =
+        { Petite.MobName, Petite.BossName, Grande.MobName, Grande.BossName };
+
+    private static readonly object CatalogGate = new object();
+    private static object _cachedMonsters;
+    private static object _cachedNpcs;
+    private static Dictionary<string, string> _catalogKeys = new Dictionary<string, string>();
+
+    /*
+     * Clé canonique (mot-clé) d'un nom de cible de Raid, ou null si le nom n'appartient à aucune
+     * des deux Raids. Sert à exclure ces cibles de l'onglet Cibles et à retrouver la munition
+     * choisie dans l'onglet Carte Raid, quelle que soit l'orthographe du catalogue.
      */
     public static string TargetKey(string name)
     {
-        string key = NormalizeName(name);
-        if (key == Petite.MobName || key == Petite.BossName
-            || key == Grande.MobName || key == Grande.BossName)
-            return key;
-        return null;
+        string normalized = NormalizeName(name);
+        if (normalized.Length == 0)
+            return null;
+
+        for (int i = 0; i < Keywords.Length; i++)
+        {
+            if (normalized == Keywords[i])
+                return Keywords[i];
+        }
+
+        string key;
+        return CatalogKeys().TryGetValue(normalized, out key) ? key : null;
+    }
+
+    private static Dictionary<string, string> CatalogKeys()
+    {
+        IReadOnlyList<string> monsters = TargetCatalog.Monsters;
+        IReadOnlyList<string> npcs = TargetCatalog.Npcs;
+        lock (CatalogGate)
+        {
+            if (ReferenceEquals(_cachedMonsters, monsters) && ReferenceEquals(_cachedNpcs, npcs))
+                return _catalogKeys;
+
+            var map = new Dictionary<string, string>();
+            AddCatalogKeys(map, monsters);
+            AddCatalogKeys(map, npcs);
+            _catalogKeys = map;
+            _cachedMonsters = monsters;
+            _cachedNpcs = npcs;
+            return map;
+        }
+    }
+
+    private static void AddCatalogKeys(Dictionary<string, string> map, IReadOnlyList<string> names)
+    {
+        if (names == null)
+            return;
+        for (int i = 0; i < names.Count; i++)
+        {
+            string normalized = NormalizeName(names[i]);
+            if (normalized.Length == 0 || map.ContainsKey(normalized))
+                continue;
+            for (int k = 0; k < Keywords.Length; k++)
+            {
+                if (normalized.Contains(Keywords[k]))
+                {
+                    map[normalized] = Keywords[k];
+                    break;
+                }
+            }
+        }
     }
 
     /*
-     * Catégorie d'arme d'une cible de Raid : monstre (harpon) seulement si le catalogue la
-     * classe uniquement parmi les monstres, sinon NPC (canon). Même règle pour la console
+     * Catégorie d'arme d'une cible de Raid, d'après le catalogue : monstre (harpon) seulement si
+     * l'entrée n'existe que parmi les monstres, sinon NPC (canon). Même règle pour la console
      * (choix de la munition) et pour le combat.
      */
     public static TargetCategory WeaponCategoryFor(string name)
@@ -392,18 +454,18 @@ public static class RaidWire
         if (key == null)
             return TargetCategory.Npc;
 
-        bool monster = CatalogContains(TargetCatalog.Monsters, key);
-        bool npc = CatalogContains(TargetCatalog.Npcs, key);
+        bool monster = CatalogHasKey(TargetCatalog.Monsters, key);
+        bool npc = CatalogHasKey(TargetCatalog.Npcs, key);
         return monster && !npc ? TargetCategory.Monster : TargetCategory.Npc;
     }
 
-    private static bool CatalogContains(IReadOnlyList<string> names, string key)
+    private static bool CatalogHasKey(IReadOnlyList<string> names, string key)
     {
         if (names == null)
             return false;
         for (int i = 0; i < names.Count; i++)
         {
-            if (NormalizeName(names[i]) == key)
+            if (TargetKey(names[i]) == key)
                 return true;
         }
         return false;
@@ -413,16 +475,16 @@ public static class RaidWire
     {
         if (pnj == null || _spec == null)
             return false;
-        string name = NormalizeName(pnj.Nom);
-        if (name == _spec.MobName)
+        string key = TargetKey(pnj.Nom);
+        if (key == _spec.MobName)
             return true;
         // Boss : ciblé seulement si l'option « boss en priorité » est cochée.
-        return Plugin.RaidBossPriority && name == _spec.BossName;
+        return Plugin.RaidBossPriority && key == _spec.BossName;
     }
 
     private static bool IsBoss(PnjInfo pnj)
     {
-        return pnj != null && _spec != null && NormalizeName(pnj.Nom) == _spec.BossName;
+        return pnj != null && _spec != null && TargetKey(pnj.Nom) == _spec.BossName;
     }
 
     private static string NormalizeName(string name)
