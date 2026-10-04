@@ -580,6 +580,8 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
                 + (string.IsNullOrEmpty(player.NomHarita) ? string.Empty : " / " + player.NomHarita));
             Row("Position", (player.CoordonneeSayi ?? "?") + " " + (player.CoordonneeHarf ?? "?")
                 + " | monde " + FormatNumber(player.X) + ", " + FormatNumber(player.Y));
+            Row("Niveau", player.Niveau.ToString());
+            Row("Talismans", "acemi " + player.TalismanAcemi + " | tilsim " + player.Talisman);
         }
         EndCard();
     }

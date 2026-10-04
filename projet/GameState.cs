@@ -45,6 +45,9 @@ namespace EtatJoueurMod
         public float TargetX;
         public float TargetY;
         public float Vitesse;
+        public int Niveau;
+        public int TalismanAcemi;
+        public int Talisman;
 
     }
 
@@ -1010,6 +1013,9 @@ namespace EtatJoueurMod
                 TargetX = source.TargetX,
                 TargetY = source.TargetY,
                 Vitesse = source.Vitesse,
+                Niveau = source.Niveau,
+                TalismanAcemi = source.TalismanAcemi,
+                Talisman = source.Talisman,
             };
 
         }
@@ -1330,6 +1336,9 @@ namespace EtatJoueurMod
             f.TargetX = j.target.x;
             f.TargetY = j.target.y;
             f.Vitesse = j.hiz;
+            f.Niveau = j.seviye;
+            f.TalismanAcemi = j.oyuncuAcemiTilsim;
+            f.Talisman = j.oyuncuTilsim;
 
             f.CibleAttaqueNetId = f.EnModeAttaque
                                 ? ObtenirNetIdCibleAttaque()
