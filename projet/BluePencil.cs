@@ -331,9 +331,6 @@ public sealed class BluePencil
         bool changee = _hasMap && _lastMap != carte;
         if (changee)
         {
-            Plugin.Logger.LogInfo(
-                "[BluePencil] Changement de carte " + _lastMap + " -> " + carte
-                + " : action annulée et mémoire effacée.");
             Reset();
         }
 
@@ -387,11 +384,6 @@ public sealed class BluePencil
             string confirmationSource = confirmation == CollectConfirmationState.Confirmed
                 ? "Callback+Reward"
                 : "TargetCallback";
-            Plugin.Logger.LogInfo(
-                "[Collect] CONFIRMED NetId=" + context.NetId
-                + " Type=" + context.Type
-                + " Source=" + confirmationSource
-                + " ActionInstanceId=" + context.ActionInstanceId + ".");
             _brain.CompleteCurrent();
             return false;
         }
@@ -399,11 +391,6 @@ public sealed class BluePencil
         if (!HasRequiredCollectibleKey(context.Type, snapshot.Joueur))
         {
             _loggedNoKeyCollectibles.Add(context.NetId);
-            Plugin.Logger.LogInfo(
-                "[Collect] SKIPPED_NO_KEY NetId=" + context.NetId
-                + " Type=" + context.Type
-                + " Keys=" + snapshot.Joueur.ClesCoffre
-                + " ActionInstanceId=" + context.ActionInstanceId + ".");
             _brain.CancelCurrent();
             return false;
         }
@@ -488,10 +475,6 @@ public sealed class BluePencil
             {
                 if (_loggedNoKeyCollectibles.Add(item.Id))
                 {
-                    Plugin.Logger.LogInfo(
-                        "[Collect] SKIPPED_NO_KEY NetId=" + item.Id
-                        + " Type=" + item.Type
-                        + " Keys=" + snapshot.Joueur.ClesCoffre + ".");
                 }
                 continue;
             }
@@ -740,10 +723,6 @@ public sealed class BluePencil
             string porteeNpc = float.IsNaN(target.Portee) || float.IsInfinity(target.Portee)
                 ? "illisible"
                 : target.Portee.ToString("0.##", CultureInfo.InvariantCulture);
-            Plugin.Logger.LogInfo(
-                "[BluePencil] NPC " + target.Name + " : portée " + porteeNpc
-                + ", la mienne " + ownRange.ToString("0.##", CultureInfo.InvariantCulture)
-                + " -> " + target.PlacementReason + ".");
         }
         return started;
     }

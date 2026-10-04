@@ -44,7 +44,6 @@ namespace EtatJoueurMod
                     else
                     {
                         actifs++;
-                        Plugin.Logger.LogInfo($"[EtatJoueur] Patch {type.Name} actif.");
                     }
                 }
                 catch (Exception e)
@@ -55,7 +54,6 @@ namespace EtatJoueurMod
             }
 
             Patch_CallbacksCollectibles.Appliquer(harmony);
-            Plugin.Logger.LogInfo($"[EtatJoueur] Patches : {actifs} actifs, {ignores} ignorés, {echecs} en échec.");
             RpcRecompenses.VerifierAuDemarrage();
         }
 
@@ -336,8 +334,6 @@ namespace EtatJoueurMod
             try
             {
                 if (__instance == null || !__instance.isLocalPlayer) return;
-                if (oldvalue <= 0 || newvalue <= 0)
-                    Plugin.Logger.LogInfo($"[EtatJoueur] Vie changée : {oldvalue} -> {newvalue}");
 
                 if (newvalue > 0 && newvalue < oldvalue)
                     GameState.SignalerDegats(newvalue, __instance.MaksCan);
@@ -401,8 +397,6 @@ namespace EtatJoueurMod
         {
             try
             {
-                if (_premierAppel == 0 && Interlocked.Exchange(ref _premierAppel, 1) == 0)
-                    Plugin.Logger.LogInfo("[EtatJoueur] HandleRemoteCall intercepté : le hook RPC est actif.");
 
                 if (!RpcRecompenses.EstHashRecompense(__1)
                     && (++_compteurInconnus % EchantillonnageInconnus) != 0)
@@ -468,17 +462,10 @@ namespace EtatJoueurMod
                 if (recu == attendu)
                 {
                     stat.Ok++;
-                    if (stat.Ok == 1)
-                        Plugin.Logger.LogInfo(
-                            $"[EtatJoueur] Premier RPC de récompense reconnu sur {nomType} (hash {recu}) : détection opérationnelle.");
                     return type;
                 }
 
                 stat.Inconnu++;
-                if (_inconnusLogues.Count < MaxHashInconnusLogues && _inconnusLogues.Add((nomType, recu)))
-                    Plugin.Logger.LogInfo(
-                        $"[EtatJoueur] RPC non reconnu sur {nomType} : hash {recu} (récompense attendue : {attendu}). " +
-                        "Normal s'il s'agit d'un autre RPC ; suspect si aucune récompense n'est détectée.");
 
                 if (stat.Ok == 0 && stat.Inconnu >= SeuilAlerteSansSucces && !stat.AlerteEmise)
                 {
@@ -524,8 +511,6 @@ namespace EtatJoueurMod
             if (__instance == null) return true;
             if (__instance.isLocalPlayer) return true;
 
-            if (Interlocked.Increment(ref _nbBloques) == 1)
-                Plugin.Logger.LogInfo("[EtatJoueur] Premier appel guverteleraktifMojo non local bloqué.");
             return false;
         }
     }

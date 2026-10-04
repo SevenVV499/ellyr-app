@@ -372,7 +372,6 @@ public static class CopperWire
             return;
         }
         Planner.SetRaidContext(RaidWire.ActiveTargetFilter, RaidWire.ActivePriorityFilter);
-        RaidWire.LogTargetsOnce(snapshot);
 
         if (_wasHalted)
         {
@@ -1358,7 +1357,6 @@ public static class CopperWire
             AstarPath astar = AstarPath.active;
             if (astar == null)
             {
-                Plugin.Logger.LogInfo("[Carte spéciale] A* : AstarPath.active est nul, règle de décalage conservée.");
                 return;
             }
 
@@ -1393,20 +1391,11 @@ public static class CopperWire
 
             if (!found)
             {
-                Plugin.Logger.LogInfo(
-                    "[Carte spéciale] A* : aucun graphe ne contient le navire (" + count
-                    + " graphes), règle de décalage conservée.");
                 return;
             }
 
             PositionReelle.DefinirLimitesObservees(
                 mapId, bestCx - bestHalf, bestCx + bestHalf, bestCy - bestHalf, bestCy + bestHalf);
-            Plugin.Logger.LogInfo(
-                "[Carte spéciale] Carte " + mapId + " : limites prises du graphe A* X ["
-                + (bestCx - bestHalf).ToString("0.##", CultureInfo.InvariantCulture) + " ; "
-                + (bestCx + bestHalf).ToString("0.##", CultureInfo.InvariantCulture) + "] Y ["
-                + (bestCy - bestHalf).ToString("0.##", CultureInfo.InvariantCulture) + " ; "
-                + (bestCy + bestHalf).ToString("0.##", CultureInfo.InvariantCulture) + "].");
         }
         catch (Exception e)
         {
@@ -1461,9 +1450,6 @@ public static class CopperWire
             if (!_worldMoveLogged)
             {
                 _worldMoveLogged = true;
-                Plugin.Logger.LogInfo(
-                    "[CopperWire] Carte " + player.harita
-                    + " : déplacement par coordonnées du monde (HedefeGit ne gère pas cette carte).");
             }
 
             if (player.aiLerp != null)
@@ -1510,9 +1496,6 @@ public static class CopperWire
                 if (!_hedefeGitFallbackLogged)
                 {
                     _hedefeGitFallbackLogged = true;
-                    Plugin.Logger.LogInfo(
-                        "[CopperWire] HedefeGit n'a pas appliqué la destination sur la carte "
-                        + player.harita + " : repli par coordonnées du monde.");
                 }
                 return IssueMoveToCellWorld(player, column, row, cell);
             }
@@ -1690,10 +1673,6 @@ public static class CopperWire
             return;
 
         _npcStoppedWhileReloading = true;
-        Plugin.Logger.LogInfo(
-            "[CopperWire] NPC " + target.Name + " : à portée ("
-            + distance.ToString("0.##", CultureInfo.InvariantCulture)
-            + "), canon en rechargement -> arrêt, puis maintien hors de sa portée.");
         StopShipHere(player, target);
     }
 

@@ -110,9 +110,6 @@ public static class SurvivalWire
             {
                 _fleeing = true;
                 _fleeStartedAt = Time.time;
-                Plugin.Logger.LogInfo(
-                    "[SurvivalWire] Fuite démarrée à " + percent.ToString("F0") + " % (seuil "
-                    + fleePercent + " %).");
             }
             return;
         }
@@ -141,8 +138,6 @@ public static class SurvivalWire
     {
         if (!Plugin.RepairPausesActivity || !Plugin.RepairEnabled)
         {
-            if (_repairPaused)
-                Plugin.Logger.LogInfo("[SurvivalWire] Fin de pause de réparation : option désactivée.");
             _repairPaused = false;
             _pauseSuppressed = false;
             return;
@@ -157,9 +152,6 @@ public static class SurvivalWire
             {
                 _repairPaused = true;
                 _pauseStartedAt = Time.time;
-                Plugin.Logger.LogInfo(
-                    "[SurvivalWire] Pause de réparation à " + percent.ToString("F0") + " % (seuil "
-                    + Plugin.RepairPercent + " %).");
             }
             return;
         }
@@ -167,20 +159,17 @@ public static class SurvivalWire
         if (joueur.Vie >= joueur.VieMax)
         {
             _repairPaused = false;
-            Plugin.Logger.LogInfo("[SurvivalWire] Fin de pause de réparation : PV pleins.");
         }
         else if (Time.time - _pauseStartedAt >= FleeMaxSeconds)
         {
             _pauseSuppressed = true;
             _repairPaused = false;
-            Plugin.Logger.LogInfo("[SurvivalWire] Fin de pause de réparation : délai maximal atteint.");
         }
     }
 
     private static void EndFlee(string reason)
     {
         _fleeing = false;
-        Plugin.Logger.LogInfo("[SurvivalWire] Fin de fuite : " + reason + ".");
     }
 
     /*

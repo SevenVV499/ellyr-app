@@ -1584,8 +1584,6 @@ namespace EtatJoueurMod
                     return false;
                 }
 
-                Plugin.Logger.LogInfo(
-                    $"[EtatJoueur] PositionReelle : {_minX.Length} cartes chargées.");
 
                 _chargementReussi = true;
                 return true;

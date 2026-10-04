@@ -249,8 +249,6 @@ public static class RespawnWire
 
         StopNormalBehavior(player);
 
-        Plugin.Logger.LogInfo(
-            "[RespawnWire] Décès détecté. Entrée dans le SystemState Respawn.");
     }
 
     private static void SendRespawnCommand(Player player)
@@ -293,9 +291,6 @@ public static class RespawnWire
              */
             manager.YenidenDog(1);
 
-            Plugin.Logger.LogInfo(
-                "[RespawnWire] YenidenDog(1) envoyé (tentative " +
-                _attempts + "/" + MaxRespawnCommandAttempts + ").");
         }
         catch (Exception e)
         {
@@ -356,8 +351,6 @@ public static class RespawnWire
         if (_brain != null)
             _brain.ExitRespawn();
 
-        Plugin.Logger.LogInfo(
-            "[RespawnWire] Respawn confirmé. Retour au comportement normal.");
     }
 
     private static void Abandon()

@@ -71,7 +71,6 @@ namespace EtatJoueurMod
                 Hooks.Appliquer(harmony);
 
                 _botTestConsole = AddComponent<BotTestConsoleBehaviour>();
-                Logger.LogInfo("[EtatJoueur] Hooks appliqués.");
             }
             catch (Exception e)
             {
@@ -238,7 +237,6 @@ namespace EtatJoueurMod
 
             setting.Value = enabled;
             _config.Save();
-            Logger.LogInfo("[CollectConfig] " + typeName + " = " + (enabled ? "Enabled" : "Disabled"));
         }
 
         // Liste de types pour laquelle les réglages ont déjà été créés. Le catalogue

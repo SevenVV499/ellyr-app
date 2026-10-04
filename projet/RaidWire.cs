@@ -77,17 +77,15 @@ public static class RaidWire
     private const float CooldownSeconds = 120f;
     private const float FleeCooldownSeconds = 10f;
     private const float MaxSnapshotAgeSeconds = 3f;
-    private const float TargetLogDelaySeconds = 3f;
 
     private static Phase _phase = Phase.Idle;
+    private static MenuManager _menu;
     private static RaidSpec _spec;
     private static float _phaseStartedAt;
     private static float _cooldownUntil;
     private static int _attempt;
     private static int _counterBefore;
     private static int _blockedMap;
-    private static float _activeSince;
-    private static bool _targetsLogged;
 
     public static bool IsActive
     {
@@ -140,7 +138,6 @@ public static class RaidWire
         _spec = null;
         _cooldownUntil = 0f;
         _attempt = 0;
-        _targetsLogged = false;
     }
 
     /*
@@ -179,9 +176,6 @@ public static class RaidWire
             {
                 if (_spec != null && mapSpec.MapId == _spec.MapId)
                 {
-                    Plugin.Logger.LogInfo("[RaidWire] Entrée confirmée : " + _spec.Label
-                        + " (carte " + map + ", médaillons " + _counterBefore
-                        + " -> " + Counter(joueur, _spec) + ").");
                     EnterActive(_spec, now);
                     return false;
                 }
@@ -210,7 +204,6 @@ public static class RaidWire
         // ---- Carte normale
         if (_phase == Phase.Active)
         {
-            Plugin.Logger.LogInfo("[RaidWire] Sortie de Raid (carte " + map + ") : réévaluation.");
             _phase = Phase.Idle;
             _spec = null;
         }
@@ -239,8 +232,6 @@ public static class RaidWire
                 _counterBefore = Counter(joueur, levelSpec);
                 _phase = Phase.Settling;
                 _phaseStartedAt = now;
-                Plugin.Logger.LogInfo("[RaidWire] Raid disponible : " + _spec.Label + " (niveau "
-                    + joueur.Niveau + ", médaillons " + _counterBefore + ").");
                 return true;
 
             case Phase.Settling:
@@ -258,7 +249,6 @@ public static class RaidWire
                 }
                 _phase = Phase.Counting;
                 _phaseStartedAt = now;
-                Plugin.Logger.LogInfo("[RaidWire] Entrée demandée (essai " + _attempt + "/" + MaxEntryAttempts + ").");
                 return true;
 
             case Phase.Counting:
@@ -288,15 +278,12 @@ public static class RaidWire
     {
         _spec = spec;
         _phase = Phase.Active;
-        _activeSince = now;
-        _targetsLogged = false;
     }
 
     private static void Abort(bool fleeing)
     {
         _phase = Phase.CoolingDown;
         _cooldownUntil = Time.time + (fleeing ? FleeCooldownSeconds : 2f);
-        Plugin.Logger.LogInfo("[RaidWire] Entrée abandonnée (conditions plus réunies).");
     }
 
     private static void GiveUp(string reason)
@@ -311,7 +298,10 @@ public static class RaidWire
     {
         try
         {
-            MenuManager menu = UnityEngine.Object.FindObjectOfType<MenuManager>();
+            // Instance mise en cache : la recherche dans la scène n'a lieu qu'une fois (ou si l'objet a disparu).
+            if (_menu == null)
+                _menu = UnityEngine.Object.FindObjectOfType<MenuManager>();
+            MenuManager menu = _menu;
             if (menu == null)
             {
                 Plugin.Logger.LogError("[RaidWire] MenuManager introuvable.");
@@ -331,42 +321,6 @@ public static class RaidWire
             Plugin.Logger.LogError("[RaidWire] Erreur d'entrée : " + e);
             return false;
         }
-    }
-
-    /*
-     * Diagnostic unique par Raid : noms réellement vus après l'entrée, pour vérifier la liste
-     * interne des cibles. Appelé par CopperWire avec le snapshot courant.
-     */
-    public static void LogTargetsOnce(EtatJeuSnapshot snapshot)
-    {
-        if (_phase != Phase.Active || _targetsLogged || snapshot == null || snapshot.Pnjs == null
-            || Time.time - _activeSince < TargetLogDelaySeconds)
-            return;
-
-        _targetsLogged = true;
-        var seen = new HashSet<string>();
-        var text = new StringBuilder();
-        int matches = 0;
-        for (int i = 0; i < snapshot.Pnjs.Count && seen.Count < 25; i++)
-        {
-            PnjInfo pnj = snapshot.Pnjs[i];
-            if (pnj == null)
-                continue;
-            bool match = IsRaidTarget(pnj);
-            if (match)
-                matches++;
-            TargetCategory catalogCategory;
-            string key = (pnj.Nom ?? "?") + " [" + (pnj.Categorie ?? "?") + "/" + (pnj.Type ?? "?") + "]"
-                + (match
-                    ? " *cible* catalogue=" + (TargetCatalog.TryGetCategory(pnj.Nom, out catalogCategory)
-                        ? catalogCategory.ToString() : "absent")
-                    : string.Empty);
-            if (seen.Add(key))
-                text.Append(seen.Count > 1 ? " ; " : string.Empty).Append(key);
-        }
-        Plugin.Logger.LogInfo("[RaidWire] Entrées du catalogue reconnues comme cibles de Raid : "
-            + string.Join(" ; ", new List<string>(CatalogKeys().Keys).ToArray()));
-        Plugin.Logger.LogInfo("[RaidWire] Cibles vues (" + matches + " retenues) : " + text);
     }
 
     /*

@@ -96,10 +96,6 @@ namespace EtatJoueurMod
                 _bullets = bullets.AsReadOnly();
                 _harpoons = harpoons.AsReadOnly();
                 _isInitialized = true;
-                Plugin.Logger.LogInfo(
-                    $"[AmmoCatalog] Catalogue runtime initialisé depuis les listeners UI : " +
-                    $"Bullets={_bullets.Count}, Harpoons={_harpoons.Count}; " +
-                    $"clés de localisation chargées={localizationKeys.Count}.");
                 LogDefinitions(_bullets);
                 LogDefinitions(_harpoons);
             }
@@ -358,10 +354,6 @@ namespace EtatJoueurMod
                 {
                     var candidates = new List<string>(relatedKeys);
                     candidates.Sort(StringComparer.Ordinal);
-                    Plugin.Logger.LogInfo(
-                        $"[AmmoCatalog] Clés proches pour {definition.Type} ID={definition.Id} " +
-                        $"(\"{definition.InternalName}\") non retenues faute de clé de titre non ambiguë : " +
-                        string.Join(", ", candidates));
                 }
 
                 resolved.Add(new AmmoDefinition(
@@ -409,10 +401,6 @@ namespace EtatJoueurMod
         {
             foreach (AmmoDefinition definition in definitions)
             {
-                Plugin.Logger.LogInfo(
-                    $"[AmmoCatalog] {definition.Type} ID={definition.Id}; " +
-                    $"InternalName=\"{definition.InternalName}\"; " +
-                    $"LocalizationKey={(string.IsNullOrEmpty(definition.LocalizationKey) ? "(inconnue)" : definition.LocalizationKey)}");
             }
         }
 
@@ -527,10 +515,6 @@ namespace EtatJoueurMod
 
                 bullets = ResolveNameCandidates(AmmoType.Bullet, bulletNames);
                 harpoons = ResolveNameCandidates(AmmoType.Harpoon, harpoonNames);
-                Plugin.Logger.LogInfo(
-                    $"[AmmoCatalog] Scan des boutons UI terminé : {count} boutons, " +
-                    $"{matchingListeners} listeners catalogables, " +
-                    $"Bullets={bullets.Count}, Harpoons={harpoons.Count} IDs natifs distincts.");
             }
             catch (Exception e)
             {
@@ -703,11 +687,6 @@ namespace EtatJoueurMod
                             out string playerAmmoField)
                         && idCandidates.Value.ContainsKey(nativeName))
                     {
-                        Plugin.Logger.LogInfo(
-                            $"[AmmoCatalog] ID {idCandidates.Key} (Bullet) résolu en \"{nativeName}\" " +
-                            $"par la branche native CephaneSpriteDegistir (RVA 0x4C7140) " +
-                            $"et Player.{playerAmmoField}; les autres noms UI sont des alias concurrents : " +
-                            $"{FormatNameCandidates(idCandidates.Value)}.");
                         definitions.Add(new AmmoDefinition(
                             type,
                             idCandidates.Key,

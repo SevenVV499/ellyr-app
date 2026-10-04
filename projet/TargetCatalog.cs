@@ -155,19 +155,10 @@ namespace EtatJoueurMod
                 _npcs = npcs.AsReadOnly();
                 _isInitialized = true;
 
-                Plugin.Logger.LogInfo(
-                    $"[TargetCatalog] Catalogue initialisé depuis les prefabs runtime : " +
-                    $"{_monsters.Count} monstres, {_npcs.Count} NPC; " +
-                    $"NetworkClient.prefabs={clientPrefabCount}, " +
-                    $"spawnPrefabs={managerPrefabCount}, noms absents={unnamedTargetCount}, " +
-                    $"erreurs d'inspection={inspectionErrorCount}.");
                 foreach (TargetComponentDescriptor descriptor in targetComponents)
                 {
                     if (descriptor.Category == TargetCategory.Monster)
                     {
-                        Plugin.Logger.LogInfo(
-                            $"[TargetCatalog] Composant monstre {descriptor.ComponentType.FullName} : " +
-                            $"{descriptor.NamedMatches} noms lisibles / {descriptor.PrefabMatches} prefabs.");
                     }
                 }
             }

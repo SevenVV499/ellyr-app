@@ -54,8 +54,6 @@ namespace EtatJoueurMod
                 _collectibleTypes = Array.AsReadOnly(found);
                 _collectibleTypeSet = new HashSet<Type>(found);
                 _initialized = true;
-                Plugin.Logger.LogInfo(
-                    "[CollectCatalog] Initialized: " + found.Length + " collectible types.");
             }
         }
 
