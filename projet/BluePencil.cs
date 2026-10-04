@@ -951,24 +951,19 @@ public sealed class BluePencil
     }
 
     /*
-     * Catégorie d'arme d'une cible. Le catalogue reste la référence ; seule exception : une
-     * cible de Raid (liste interne) absente du catalogue (typiquement un boss de type navire
-     * d'événement) est classée d'après sa classe de jeu, comme le fait le catalogue lui-même
-     * (nom de type contenant « Monster » ou catégorie « monstre » = Monster, sinon Npc).
+     * Catégorie d'arme d'une cible. Le catalogue reste la référence, sauf pour les cibles de la
+     * liste interne d'une Raid (boss de type navire d'événement absents du catalogue) :
+     * RaidWire.WeaponCategoryFor, la même règle que la console pour le choix des munitions.
      */
     private bool ResolveWeaponCategory(PnjInfo pnj, out TargetCategory category)
     {
-        if (TargetCatalog.TryGetCategory(pnj.Nom, out category))
+        if (_raidAllowPnj != null && _raidAllowPnj(pnj))
+        {
+            category = RaidWire.WeaponCategoryFor(pnj.Nom);
             return true;
+        }
 
-        if (_raidAllowPnj == null || !_raidAllowPnj(pnj))
-            return false;
-
-        bool monster = string.Equals(pnj.Categorie, "monstre", StringComparison.Ordinal)
-            || !string.IsNullOrEmpty(pnj.Type)
-            && pnj.Type.IndexOf("Monster", StringComparison.OrdinalIgnoreCase) >= 0;
-        category = monster ? TargetCategory.Monster : TargetCategory.Npc;
-        return true;
+        return TargetCatalog.TryGetCategory(pnj.Nom, out category);
     }
 
     private bool PriorityPreemptsActiveCombat(EtatJeuSnapshot snapshot, BehaviorAction active)

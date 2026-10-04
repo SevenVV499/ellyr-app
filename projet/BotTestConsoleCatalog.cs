@@ -37,6 +37,7 @@ internal static class BotTestConsoleCatalog
             string name = TargetCatalog.NormalizeName(rawName);
             TargetCategory actualCategory;
             if (string.IsNullOrWhiteSpace(name)
+                || RaidWire.TargetKey(name) != null
                 || !displayed.Add(name)
                 || !TargetCatalog.TryGetCategory(name, out actualCategory)
                 || actualCategory != expectedCategory)

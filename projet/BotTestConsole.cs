@@ -15,10 +15,11 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private const int TabSurvival = 1;
     private const int TabTargets = 2;
     private const int TabCollect = 3;
-    private const int TabStatus = 4;
-    private const int TabEvents = 5;
+    private const int TabRaid = 4;
+    private const int TabStatus = 5;
+    private const int TabEvents = 6;
     private static readonly string[] TabLabels =
-        { "Contrôle", "Survie", "Cibles", "Collecte", "État", "Événements" };
+        { "Contrôle", "Survie", "Cibles", "Collecte", "Carte Raid", "État", "Événements" };
 
     private const float HeaderHeight = 44f;
     private const float TabBarHeight = 34f;
@@ -155,6 +156,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             case TabSurvival: DrawSurvivalTab(); break;
             case TabTargets: DrawTargetsTab(); break;
             case TabCollect: DrawCollectTab(); break;
+            case TabRaid: DrawRaidTab(); break;
             case TabEvents: DrawEventsTab(); break;
             default: DrawStatusTab(); break;
         }
@@ -338,7 +340,10 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             ? "Seuls les NPC et monstres à PV max sont engagés ; les cibles déjà entamées sont ignorées."
             : "Toutes les cibles sélectionnées peuvent être engagées, même déjà entamées.");
         EndCard();
+    }
 
+    private void DrawRaidTab()
+    {
         BeginCard("Carte Raid");
         bool raid = Switch(Plugin.RaidEnabled, "Entrer automatiquement en Raid");
         if (raid != Plugin.RaidEnabled)
@@ -352,6 +357,51 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         Hint("Le type de Raid dépend du niveau (1-10 petite, 11-15 grande) ; un médaillon est requis.");
         Hint("Dans la Raid : navigation, combat et réparation uniquement, avec les cibles propres à la Raid.");
         EndCard();
+
+        BeginCard("Petite Raid", "Niveaux 1 à 10 - talisman du soleil");
+        DrawRaidTargetRow("Sunburst", "mob");
+        DrawRaidTargetRow("Amaterasu", "boss");
+        EndCard();
+
+        BeginCard("Grande Raid", "Niveaux 11 à 15 - talisman de Behemoth");
+        DrawRaidTargetRow("Léviathan", "mob");
+        DrawRaidTargetRow("Behemoth", "boss");
+        EndCard();
+        Hint("Ces quatre cibles sont retirées de l'onglet Cibles : leurs munitions se règlent ici.");
+    }
+
+    [HideFromIl2Cpp]
+    private void DrawRaidTargetRow(string name, string role)
+    {
+        TargetCategory category = RaidWire.WeaponCategoryFor(name);
+        string targetKey = GetTargetKey(category, name);
+        bool dropdownOpen = string.Equals(
+            _editingAmmoTarget, targetKey, StringComparison.OrdinalIgnoreCase);
+
+        GUILayout.BeginHorizontal();
+        GUILayout.Label(name + " (" + role + ")", _sLabel, GUILayout.Width(170f));
+        IReadOnlyList<AmmoDefinition> ammo = GetAmmoCatalog(category);
+        string caption = ammo.Count == 0
+            ? "Munitions indisponibles"
+            : (category == TargetCategory.Npc ? "Boulet : " : "Harpon : ")
+                + DescribeAmmo(category, ResolveAmmo(category, name)) + (dropdownOpen ? "  ^" : "  v");
+        if (GUILayout.Button(caption, dropdownOpen ? _sSegOn : _sBtn,
+                GUILayout.Width(270f), GUILayout.Height(26f)))
+        {
+            if (dropdownOpen)
+            {
+                CloseAmmoEditor();
+            }
+            else
+            {
+                _editingAmmoTarget = targetKey;
+                _ammoScroll = Vector2.zero;
+            }
+        }
+        GUILayout.EndHorizontal();
+
+        if (dropdownOpen)
+            DrawAmmoDropdown(category, name);
     }
 
     private void DrawSurvivalTab()
@@ -1183,6 +1233,10 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
     private bool IsPnjAllowed(string name)
     {
+        // Cibles de Raid : réservées au module Raid, jamais ciblées via l'onglet Cibles.
+        if (RaidWire.TargetKey(name) != null)
+            return false;
+
         TargetCategory category;
         if (!TargetCatalog.TryGetCategory(name, out category))
             return false;
@@ -1243,6 +1297,11 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
     private static string GetTargetKey(TargetCategory category, string name)
     {
+        // Cibles de Raid : clé indépendante de l'orthographe et de la catégorie du jeu.
+        string raidKey = RaidWire.TargetKey(name);
+        if (raidKey != null)
+            return "raid:" + raidKey;
+
         return category + ":" + TargetCatalog.NormalizeName(name);
     }
 

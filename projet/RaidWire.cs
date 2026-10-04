@@ -367,6 +367,48 @@ public static class RaidWire
         Plugin.Logger.LogInfo("[RaidWire] Cibles vues (" + matches + " retenues) : " + text);
     }
 
+    /*
+     * Clé canonique d'un nom de cible de Raid (sans accents ni majuscules), ou null si le nom
+     * n'appartient à aucune des deux Raids. Sert à exclure ces cibles de l'onglet Cibles et à
+     * retrouver la munition choisie dans l'onglet Carte Raid, quelle que soit l'orthographe du jeu.
+     */
+    public static string TargetKey(string name)
+    {
+        string key = NormalizeName(name);
+        if (key == Petite.MobName || key == Petite.BossName
+            || key == Grande.MobName || key == Grande.BossName)
+            return key;
+        return null;
+    }
+
+    /*
+     * Catégorie d'arme d'une cible de Raid : monstre (harpon) seulement si le catalogue la
+     * classe uniquement parmi les monstres, sinon NPC (canon). Même règle pour la console
+     * (choix de la munition) et pour le combat.
+     */
+    public static TargetCategory WeaponCategoryFor(string name)
+    {
+        string key = TargetKey(name);
+        if (key == null)
+            return TargetCategory.Npc;
+
+        bool monster = CatalogContains(TargetCatalog.Monsters, key);
+        bool npc = CatalogContains(TargetCatalog.Npcs, key);
+        return monster && !npc ? TargetCategory.Monster : TargetCategory.Npc;
+    }
+
+    private static bool CatalogContains(IReadOnlyList<string> names, string key)
+    {
+        if (names == null)
+            return false;
+        for (int i = 0; i < names.Count; i++)
+        {
+            if (NormalizeName(names[i]) == key)
+                return true;
+        }
+        return false;
+    }
+
     private static bool IsRaidTarget(PnjInfo pnj)
     {
         if (pnj == null || _spec == null)
