@@ -348,7 +348,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         bool raid = Switch(Plugin.RaidEnabled, "Entrer automatiquement en Raid");
         if (raid != Plugin.RaidEnabled)
             Plugin.SetRaidEnabled(raid);
-        bool bossPriority = Switch(Plugin.RaidBossPriority, "Boss en priorité (Amaterasu / Behemoth)");
+        bool bossPriority = Switch(Plugin.RaidBossPriority, "Boss en priorité (Ameterasu / Behemoth)");
         if (bossPriority != Plugin.RaidBossPriority)
             Plugin.SetRaidBossPriority(bossPriority);
         Hint(Plugin.RaidBossPriority
@@ -360,7 +360,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
         BeginCard("Petite Raid", "Niveaux 1 à 10 - talisman du soleil");
         DrawRaidTargetRow("Sunburst", "mob");
-        DrawRaidTargetRow("Amaterasu", "boss");
+        DrawRaidTargetRow("Ameterasu", "boss");
         EndCard();
 
         BeginCard("Grande Raid", "Niveaux 11 à 15 - talisman de Behemoth");

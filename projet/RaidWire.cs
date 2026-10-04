@@ -53,7 +53,7 @@ public static class RaidWire
         MaxLevel = 10,
         MapId = 41,
         MobName = "sunburst",
-        BossName = "amaterasu"
+        BossName = "ameterasu"
     };
 
     private static readonly RaidSpec Grande = new RaidSpec
