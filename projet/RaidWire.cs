@@ -382,6 +382,7 @@ public static class RaidWire
     private static object _cachedMonsters;
     private static object _cachedNpcs;
     private static Dictionary<string, string> _catalogKeys = new Dictionary<string, string>();
+    private static readonly Dictionary<string, string> _keyCache = new Dictionary<string, string>();
 
     /*
      * Clé canonique (mot-clé) d'un nom de cible de Raid, ou null si le nom n'appartient à aucune
@@ -389,6 +390,28 @@ public static class RaidWire
      * choisie dans l'onglet Carte Raid, quelle que soit l'orthographe du catalogue.
      */
     public static string TargetKey(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+            return null;
+
+        // Appelé pour chaque PNJ à chaque décision (y compris hors Raid, via le filtre de
+        // cibles) : le résultat est mémorisé par nom pour éviter toute normalisation répétée.
+        lock (CatalogGate)
+        {
+            Dictionary<string, string> catalogKeys = CatalogKeys();
+            string cached;
+            if (_keyCache.TryGetValue(name, out cached))
+                return cached;
+
+            string key = ComputeTargetKey(name, catalogKeys);
+            if (_keyCache.Count > 2048)
+                _keyCache.Clear();
+            _keyCache[name] = key;
+            return key;
+        }
+    }
+
+    private static string ComputeTargetKey(string name, Dictionary<string, string> catalogKeys)
     {
         string normalized = NormalizeName(name);
         if (normalized.Length == 0)
@@ -401,7 +424,7 @@ public static class RaidWire
         }
 
         string key;
-        return CatalogKeys().TryGetValue(normalized, out key) ? key : null;
+        return catalogKeys.TryGetValue(normalized, out key) ? key : null;
     }
 
     private static Dictionary<string, string> CatalogKeys()
@@ -417,6 +440,7 @@ public static class RaidWire
             AddCatalogKeys(map, monsters);
             AddCatalogKeys(map, npcs);
             _catalogKeys = map;
+            _keyCache.Clear();
             _cachedMonsters = monsters;
             _cachedNpcs = npcs;
             return map;
