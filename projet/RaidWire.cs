@@ -298,10 +298,15 @@ public static class RaidWire
     {
         try
         {
-            // Instance mise en cache : la recherche dans la scène n'a lieu qu'une fois (ou si l'objet a disparu).
-            if (_menu == null)
-                _menu = UnityEngine.Object.FindObjectOfType<MenuManager>();
-            MenuManager menu = _menu;
+            // Accès statique du jeu (assigné dans MenuManager.Start) ; repli sur une recherche
+            // dans la scène, mémorisée, tant qu'il est nul.
+            MenuManager menu = MenuManager.menuManager;
+            if (menu == null)
+            {
+                if (_menu == null)
+                    _menu = UnityEngine.Object.FindObjectOfType<MenuManager>();
+                menu = _menu;
+            }
             if (menu == null)
             {
                 Plugin.Logger.LogError("[RaidWire] MenuManager introuvable.");
