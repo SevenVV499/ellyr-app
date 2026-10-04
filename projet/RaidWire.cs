@@ -318,10 +318,12 @@ public static class RaidWire
                 return false;
             }
 
+            // Petite Raid (talisman du soleil) = raidmapgir / oyuncuTilsim ;
+            // Grande Raid (talisman de Behemoth) = raidmapAcemigir / oyuncuAcemiTilsim.
             if (spec.Kind == RaidKind.Petite)
-                menu.raidmapAcemigir();
-            else
                 menu.raidmapgir();
+            else
+                menu.raidmapAcemigir();
             return true;
         }
         catch (Exception e)
@@ -394,7 +396,7 @@ public static class RaidWire
 
     private static int Counter(FicheJoueur joueur, RaidSpec spec)
     {
-        return spec.Kind == RaidKind.Petite ? joueur.TalismanAcemi : joueur.Talisman;
+        return spec.Kind == RaidKind.Petite ? joueur.Talisman : joueur.TalismanAcemi;
     }
 
     private static RaidSpec SpecForLevel(int level)
