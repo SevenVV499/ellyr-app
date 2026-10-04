@@ -32,6 +32,7 @@ namespace EtatJoueurMod
         private static ConfigEntry<int> _fleePercent;
         private static ConfigEntry<bool> _fleeCollectEnabled;
         private static ConfigEntry<bool> _repairPausesActivity;
+        private static ConfigEntry<bool> _raidEnabled;
         private static ConfigEntry<bool> _onlyFullHealthTargets;
         private static readonly Dictionary<string, ConfigEntry<bool>> CollectibleTypeSettings =
             new Dictionary<string, ConfigEntry<bool>>(StringComparer.Ordinal);
@@ -124,6 +125,16 @@ namespace EtatJoueurMod
             SetSetting(_onlyFullHealthTargets, enabled);
         }
 
+        public static bool RaidEnabled
+        {
+            get { return _raidEnabled != null && _raidEnabled.Value; }
+        }
+
+        public static void SetRaidEnabled(bool enabled)
+        {
+            SetSetting(_raidEnabled, enabled);
+        }
+
         public static bool RepairPausesActivity
         {
             get { return _repairPausesActivity != null && _repairPausesActivity.Value; }
@@ -182,6 +193,8 @@ namespace EtatJoueurMod
                 "Only engage NPCs / monsters that are at full HP. When false, damaged targets can be engaged too.");
             _repairPausesActivity = _config.Bind("Survival", "RepairPausesActivity", false,
                 "Repair mode: false = repair during activity, true = stop all activity (ship still) and repair, resume at full HP.");
+            _raidEnabled = _config.Bind("Raid", "RaidEnabled", false,
+                "Enable the Raid map module: enter the Raid matching the player level when the medallion is available.");
             _fleePercent = _config.Bind("Survival", "FleePercent", 60,
                 new ConfigDescription("Flee trigger threshold, in percent of max HP.", percentRange));
         }

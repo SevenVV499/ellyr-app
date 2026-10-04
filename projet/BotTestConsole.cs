@@ -338,6 +338,14 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             ? "Seuls les NPC et monstres à PV max sont engagés ; les cibles déjà entamées sont ignorées."
             : "Toutes les cibles sélectionnées peuvent être engagées, même déjà entamées.");
         EndCard();
+
+        BeginCard("Carte Raid");
+        bool raid = Switch(Plugin.RaidEnabled, "Entrer automatiquement en Raid");
+        if (raid != Plugin.RaidEnabled)
+            Plugin.SetRaidEnabled(raid);
+        Hint("Le type de Raid dépend du niveau (1-10 petite, 11-15 grande) ; un médaillon est requis.");
+        Hint("Dans la Raid : navigation, combat et réparation uniquement, avec les cibles propres à la Raid.");
+        EndCard();
     }
 
     private void DrawSurvivalTab()
@@ -537,6 +545,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         BeginCard("Bot");
         Row("Système", CopperWire.SystemState == BehaviorSystemState.Respawn ? "Réapparition" : "Normal");
         Row("Action", action == null ? "Aucune" : ActionLabel(action.Type) + " / " + ActionStateLabel(action.State));
+        Row("Raid", RaidWire.Description);
         Row("Réapparition", RespawnWire.IsActive
             ? RespawnWire.IsAbandoned ? "active (tentatives abandonnées)" : "active"
             : "inactive");

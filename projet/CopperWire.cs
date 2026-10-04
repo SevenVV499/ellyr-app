@@ -218,6 +218,7 @@ public static class CopperWire
         Planner.CancelCurrent();
         RespawnWire.Reset();
         SurvivalWire.Reset();
+        RaidWire.Reset();
     }
 
     public static void SetLongRange(bool enabled)
@@ -317,6 +318,7 @@ public static class CopperWire
         if (etaitActif || RespawnWire.IsActive || Brain.IsRespawning)
         {
             SurvivalWire.Reset();
+            RaidWire.Reset();
             if (_executedAction != null)
             {
                 CleanupAction(_executedAction, player);
@@ -356,6 +358,21 @@ public static class CopperWire
             HaltAllActivity(player, snapshot);
             return;
         }
+
+        // Carte Raid : entrée (navire immobile pendant le décompte du jeu) ou contexte Raid actif.
+        BehaviorAction currentAction = Brain.CurrentAction;
+        bool actionEngaged = currentAction != null
+            && !currentAction.IsFinished
+            && currentAction.Type != BehaviorActionType.Navigation;
+        if (RaidWire.Tick(player, snapshot, fleeing, actionEngaged))
+        {
+            Planner.SetRaidContext(null);
+            _wasHalted = true;
+            HaltAllActivity(player, snapshot);
+            return;
+        }
+        Planner.SetRaidContext(RaidWire.ActiveTargetFilter);
+        RaidWire.LogTargetsOnce(snapshot);
 
         if (_wasHalted)
         {

@@ -153,6 +153,9 @@ public sealed class BluePencil
     private readonly List<uint> _excludedMonsterTargetsToRemove = new List<uint>();
     private Func<PnjInfo, bool> _allowPnj;
     private Func<NavireInfo, bool> _allowShip;
+    // Contexte Raid : liste de cibles imposée par RaidWire (remplace celle de l'utilisateur,
+    // sans Collecte ni cibles joueurs).
+    private Func<PnjInfo, bool> _raidAllowPnj;
     private Func<CollectibleInfo, bool> _allowCollectible;
     private bool _collectEnabled;
     private bool _combatEnabled;
@@ -167,7 +170,17 @@ public sealed class BluePencil
         _brain = brain ?? throw new ArgumentNullException(nameof(brain));
     }
 
-    public bool CombatEnabled { get { return _combatEnabled; } }
+    public bool CombatEnabled { get { return _combatEnabled || _raidAllowPnj != null; } }
+
+    public void SetRaidContext(Func<PnjInfo, bool> allowPnj)
+    {
+        _raidAllowPnj = allowPnj;
+    }
+
+    private Func<PnjInfo, bool> EffectiveAllowPnj
+    {
+        get { return _raidAllowPnj ?? _allowPnj; }
+    }
     public bool LongRange { get { return _longRange; } }
 
     public void SetLongRange(bool enabled)
@@ -214,8 +227,9 @@ public sealed class BluePencil
 
         // Fuite : plus aucun cycle Combat ; la Collecte n'est permise que si
         // l'option correspondante est cochée, sinon seule la Navigation reste.
-        bool collectAllowed = _collectEnabled && (!fleeing || collectWhileFleeing);
-        bool combatAllowed = _combatEnabled && !fleeing;
+        bool inRaid = _raidAllowPnj != null;
+        bool collectAllowed = _collectEnabled && !inRaid && (!fleeing || collectWhileFleeing);
+        bool combatAllowed = (_combatEnabled || inRaid) && !fleeing;
 
         BehaviorAction active = _brain.CurrentAction;
         if (active != null && !active.IsFinished)
@@ -347,7 +361,7 @@ public sealed class BluePencil
             return false;
         }
 
-        if (!_collectEnabled)
+        if (!_collectEnabled || _raidAllowPnj != null)
         {
             _brain.CancelCurrent();
             return false;
@@ -407,7 +421,7 @@ public sealed class BluePencil
             return false;
         }
 
-        if (!_combatEnabled)
+        if (!_combatEnabled && _raidAllowPnj == null)
         {
             _brain.CancelCurrent();
             return false;
@@ -590,13 +604,14 @@ public sealed class BluePencil
     {
         CombatTarget best = null;
 
-        if (_allowPnj != null && snapshot.Pnjs != null)
+        Func<PnjInfo, bool> allowPnj = EffectiveAllowPnj;
+        if (allowPnj != null && snapshot.Pnjs != null)
         {
             for (int i = 0; i < snapshot.Pnjs.Count; i++)
             {
                 PnjInfo pnj = snapshot.Pnjs[i];
                 if (pnj == null || pnj.Id == 0 || pnj.Vie <= 0
-                    || IsInvalidDistance(pnj.Distance) || !_allowPnj(pnj))
+                    || IsInvalidDistance(pnj.Distance) || !allowPnj(pnj))
                     continue;
 
                 // Option « cibles à PV max » : une cible déjà entamée n'est pas engagée.
@@ -638,7 +653,7 @@ public sealed class BluePencil
             }
         }
 
-        if (_allowShip != null && snapshot.Navires != null)
+        if (_allowShip != null && _raidAllowPnj == null && snapshot.Navires != null)
         {
             for (int i = 0; i < snapshot.Navires.Count; i++)
             {
@@ -812,13 +827,13 @@ public sealed class BluePencil
     {
         if (engaged.Kind == CombatTargetKind.NetworkId)
         {
-            if (snapshot.Pnjs == null || _allowPnj == null)
+            if (snapshot.Pnjs == null || EffectiveAllowPnj == null)
                 return null;
 
             for (int i = 0; i < snapshot.Pnjs.Count; i++)
             {
                 PnjInfo pnj = snapshot.Pnjs[i];
-                if (pnj == null || pnj.Id != engaged.NetId || !_allowPnj(pnj))
+                if (pnj == null || pnj.Id != engaged.NetId || !EffectiveAllowPnj(pnj))
                     continue;
 
                 // A target that is no longer classifiable is invalid and is abandoned.
@@ -844,7 +859,7 @@ public sealed class BluePencil
                 };
             }
         }
-        else if (snapshot.Navires != null && _allowShip != null)
+        else if (snapshot.Navires != null && _allowShip != null && _raidAllowPnj == null)
         {
             for (int i = 0; i < snapshot.Navires.Count; i++)
             {
