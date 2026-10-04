@@ -156,6 +156,8 @@ public sealed class BluePencil
     // Contexte Raid : liste de cibles imposée par RaidWire (remplace celle de l'utilisateur,
     // sans Collecte ni cibles joueurs).
     private Func<PnjInfo, bool> _raidAllowPnj;
+    // Cibles prioritaires en Raid (boss) : choisies avant toute autre, même plus éloignées.
+    private Func<PnjInfo, bool> _raidPriorityPnj;
     private Func<CollectibleInfo, bool> _allowCollectible;
     private bool _collectEnabled;
     private bool _combatEnabled;
@@ -172,9 +174,10 @@ public sealed class BluePencil
 
     public bool CombatEnabled { get { return _combatEnabled || _raidAllowPnj != null; } }
 
-    public void SetRaidContext(Func<PnjInfo, bool> allowPnj)
+    public void SetRaidContext(Func<PnjInfo, bool> allowPnj, Func<PnjInfo, bool> priorityPnj = null)
     {
         _raidAllowPnj = allowPnj;
+        _raidPriorityPnj = allowPnj == null ? null : priorityPnj;
     }
 
     private Func<PnjInfo, bool> EffectiveAllowPnj
@@ -241,7 +244,10 @@ public sealed class BluePencil
             }
             else if (active.Type == BehaviorActionType.Combat)
             {
-                if (combatAllowed && EvaluerCombat(snapshot, active))
+                // Raid : un boss visible prend le pas sur un combat en cours contre un mob.
+                if (combatAllowed && PriorityPreemptsActiveCombat(snapshot, active))
+                    _brain.CancelCurrent();
+                else if (combatAllowed && EvaluerCombat(snapshot, active))
                     return BehaviorActionType.Combat;
             }
         }
@@ -604,6 +610,7 @@ public sealed class BluePencil
     {
         CombatTarget best = null;
 
+        bool bestIsPriority = false;
         Func<PnjInfo, bool> allowPnj = EffectiveAllowPnj;
         if (allowPnj != null && snapshot.Pnjs != null)
         {
@@ -648,8 +655,14 @@ public sealed class BluePencil
                     AmmoId = ResolveAmmo(weaponCategory, pnj.Nom),
                     Portee = pnj.Portee
                 };
-                if (IsCloser(candidate, best))
+                bool priority = _raidPriorityPnj != null && _raidPriorityPnj(pnj);
+                if (best == null
+                    || priority && !bestIsPriority
+                    || priority == bestIsPriority && IsCloser(candidate, best))
+                {
                     best = candidate;
+                    bestIsPriority = priority;
+                }
             }
         }
 
@@ -934,6 +947,31 @@ public sealed class BluePencil
                 return true;
         }
         return false;
+    }
+
+    private bool PriorityPreemptsActiveCombat(EtatJeuSnapshot snapshot, BehaviorAction active)
+    {
+        if (_raidPriorityPnj == null || snapshot.Pnjs == null)
+            return false;
+
+        CombatActionContext context = active.Context as CombatActionContext;
+        CombatTarget engaged = context == null ? null : context.Target;
+        if (engaged == null || engaged.Kind != CombatTargetKind.NetworkId)
+            return false;
+
+        bool bossVisible = false;
+        for (int i = 0; i < snapshot.Pnjs.Count; i++)
+        {
+            PnjInfo pnj = snapshot.Pnjs[i];
+            if (pnj == null || pnj.Vie <= 0 || !_raidPriorityPnj(pnj))
+                continue;
+            // Le combat en cours vise déjà un boss : rien à préempter.
+            if (pnj.Id == engaged.NetId)
+                return false;
+            if (!IsInvalidDistance(pnj.Distance))
+                bossVisible = true;
+        }
+        return bossVisible;
     }
 
     private static bool IsCloser(CombatTarget candidate, CombatTarget current)

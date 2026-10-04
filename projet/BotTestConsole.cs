@@ -343,6 +343,12 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         bool raid = Switch(Plugin.RaidEnabled, "Entrer automatiquement en Raid");
         if (raid != Plugin.RaidEnabled)
             Plugin.SetRaidEnabled(raid);
+        bool bossPriority = Switch(Plugin.RaidBossPriority, "Boss en priorité (Amaterasu / Behemoth)");
+        if (bossPriority != Plugin.RaidBossPriority)
+            Plugin.SetRaidBossPriority(bossPriority);
+        Hint(Plugin.RaidBossPriority
+            ? "Dès qu'un boss est visible, il est attaqué avant les mobs, même plus éloigné."
+            : "Boss ignoré : seuls les mobs (Sunburst / Léviathan) sont attaqués.");
         Hint("Le type de Raid dépend du niveau (1-10 petite, 11-15 grande) ; un médaillon est requis.");
         Hint("Dans la Raid : navigation, combat et réparation uniquement, avec les cibles propres à la Raid.");
         EndCard();

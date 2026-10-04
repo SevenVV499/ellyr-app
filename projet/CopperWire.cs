@@ -371,7 +371,7 @@ public static class CopperWire
             HaltAllActivity(player, snapshot);
             return;
         }
-        Planner.SetRaidContext(RaidWire.ActiveTargetFilter);
+        Planner.SetRaidContext(RaidWire.ActiveTargetFilter, RaidWire.ActivePriorityFilter);
         RaidWire.LogTargetsOnce(snapshot);
 
         if (_wasHalted)

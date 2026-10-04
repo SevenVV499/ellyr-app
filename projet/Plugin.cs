@@ -33,6 +33,7 @@ namespace EtatJoueurMod
         private static ConfigEntry<bool> _fleeCollectEnabled;
         private static ConfigEntry<bool> _repairPausesActivity;
         private static ConfigEntry<bool> _raidEnabled;
+        private static ConfigEntry<bool> _raidBossPriority;
         private static ConfigEntry<bool> _onlyFullHealthTargets;
         private static readonly Dictionary<string, ConfigEntry<bool>> CollectibleTypeSettings =
             new Dictionary<string, ConfigEntry<bool>>(StringComparer.Ordinal);
@@ -125,6 +126,16 @@ namespace EtatJoueurMod
             SetSetting(_onlyFullHealthTargets, enabled);
         }
 
+        public static bool RaidBossPriority
+        {
+            get { return _raidBossPriority == null || _raidBossPriority.Value; }
+        }
+
+        public static void SetRaidBossPriority(bool enabled)
+        {
+            SetSetting(_raidBossPriority, enabled);
+        }
+
         public static bool RaidEnabled
         {
             get { return _raidEnabled != null && _raidEnabled.Value; }
@@ -195,6 +206,8 @@ namespace EtatJoueurMod
                 "Repair mode: false = repair during activity, true = stop all activity (ship still) and repair, resume at full HP.");
             _raidEnabled = _config.Bind("Raid", "RaidEnabled", false,
                 "Enable the Raid map module: enter the Raid matching the player level when the medallion is available.");
+            _raidBossPriority = _config.Bind("Raid", "RaidBossPriority", true,
+                "Raid maps: true = attack the boss first when it is visible; false = ignore the boss, only the mobs.");
             _fleePercent = _config.Bind("Survival", "FleePercent", 60,
                 new ConfigDescription("Flee trigger threshold, in percent of max HP.", percentRange));
         }

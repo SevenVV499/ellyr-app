@@ -41,7 +41,8 @@ public static class RaidWire
         public int MinLevel;
         public int MaxLevel;
         public int MapId;
-        public string[] TargetNames;
+        public string MobName;
+        public string BossName;
     }
 
     private static readonly RaidSpec Petite = new RaidSpec
@@ -51,7 +52,8 @@ public static class RaidWire
         MinLevel = 1,
         MaxLevel = 10,
         MapId = 41,
-        TargetNames = new[] { "sunburst", "amaterasu" }
+        MobName = "sunburst",
+        BossName = "amaterasu"
     };
 
     private static readonly RaidSpec Grande = new RaidSpec
@@ -61,7 +63,8 @@ public static class RaidWire
         MinLevel = 11,
         MaxLevel = 15,
         MapId = 42,
-        TargetNames = new[] { "leviathan", "behemoth" }
+        MobName = "leviathan",
+        BossName = "behemoth"
     };
 
     // Immobilité avant l'envoi de l'ordre d'entrée (laisse retomber un déplacement en cours).
@@ -100,6 +103,12 @@ public static class RaidWire
     public static Func<PnjInfo, bool> ActiveTargetFilter
     {
         get { return _phase == Phase.Active && _spec != null ? IsRaidTarget : (Func<PnjInfo, bool>)null; }
+    }
+
+    // Cibles à traiter avant toutes les autres (boss), seulement si l'option est cochée.
+    public static Func<PnjInfo, bool> ActivePriorityFilter
+    {
+        get { return _phase == Phase.Active && _spec != null && Plugin.RaidBossPriority ? IsBoss : (Func<PnjInfo, bool>)null; }
     }
 
     public static string Description
@@ -357,12 +366,15 @@ public static class RaidWire
         if (pnj == null || _spec == null)
             return false;
         string name = NormalizeName(pnj.Nom);
-        for (int i = 0; i < _spec.TargetNames.Length; i++)
-        {
-            if (name == _spec.TargetNames[i])
-                return true;
-        }
-        return false;
+        if (name == _spec.MobName)
+            return true;
+        // Boss : ciblé seulement si l'option « boss en priorité » est cochée.
+        return Plugin.RaidBossPriority && name == _spec.BossName;
+    }
+
+    private static bool IsBoss(PnjInfo pnj)
+    {
+        return pnj != null && _spec != null && NormalizeName(pnj.Nom) == _spec.BossName;
     }
 
     private static string NormalizeName(string name)
