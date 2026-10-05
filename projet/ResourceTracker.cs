@@ -51,6 +51,64 @@ public static class ResourceTracker
         { "oyuncuRaidHasar", "Dégâts de Raid" }
     };
 
+    // Libellés de secours (français), utilisés quand aucune clé de la table du jeu ne convient.
+    private static readonly Dictionary<string, string> FallbackLabels = new Dictionary<string, string>
+    {
+        { "oyuncuKristal", "Cristal" },
+        { "oyuncuBarut", "Poudre" },
+        { "oyuncuAsklepios", "Compétence Asklepios" },
+        { "oyuncuProfesyonelKorsan", "Pirate Professionnel" },
+        { "oyuncuNormalKorsan", "Pirate Normal" },
+        { "oyuncuAcemiKorsan", "Pirate Novice" },
+        { "oyuncuKanaSusamis", "Soif de Sang" },
+        { "oyuncuKayipAsk", "Amour perdu" },
+        { "oyuncuSarapnelYagmuru", "Pluie d'Éclats" },
+        { "oyuncuTopGuclendirici", "Noyau de canon" },
+        { "oyuncuYavaslatici", "Feu d'Elmo" },
+        { "oyuncuRoket", "Feu Céleste" },
+        { "oyuncuHizTasi", "Pierre de Vitesse" },
+        { "oyuncuKalkan", "Armure en Acier" },
+        { "oyuncuSisDuvari", "Mur de Brouillard" },
+        { "oyuncuYardimCagrisi", "Appel SOS" },
+        { "oyuncuAmulet25k", "Amulette 25k" },
+        { "oyuncuAmulet50k", "Amulette 50k" },
+        { "oyuncuKartalGozu", "Œil d'Aigle" },
+        { "oyuncuHavaiGulle", "Boulet Feu d'Artifice" },
+        { "oyuncuKabukKiriciGulle", "Boulet Brise-Coquille" },
+        { "oyuncuKalpKiriciGulle", "Boulet Brise-Cœur" },
+        { "oyuncuOceanGulle", "Boulet Océan" },
+        { "oyuncuGuclendirilmisPatlayanGulle", "Boulet Explosif Renforcé" },
+        { "oyuncuPatlayanGulle", "Boulet Explosif" },
+        { "oyuncuBuzGulle", "Boulet de glace" },
+        { "oyuncuOyukGulle", "Boulet Creux" },
+        { "oyuncuAltinZipkin", "Harpon d'Or" },
+        { "oyuncuGumusZipkin", "Harpon d'Argent" },
+        { "oyuncuInciZipkin", "Harpon de perles" },
+        { "oyuncuMicoAltin", "Esclave Niveau 1" },
+        { "oyuncuMicoInci", "Esclave Niveau 2" },
+        { "oyuncuDumenciInci", "Barreur" },
+        { "oyuncuTopcuInci", "Canonnier" }
+    };
+
+    // Compteurs qui ne sont pas des ressources (identifiants, états, emplacements, progression).
+    private static bool IsExcluded(string name)
+    {
+        string lower = name.ToLowerInvariant();
+        if (lower.EndsWith("id", StringComparison.Ordinal))
+            return true;
+        string[] tokens =
+        {
+            "durumu", "bankontrol", "sunucutahtasi", "slot", "kaleyetenek", "donanilmis",
+            "yuvasi", "ilerleme", "sirasi", "haritapak", "tasinan", "teslim", "filoseviye"
+        };
+        for (int i = 0; i < tokens.Length; i++)
+        {
+            if (lower.Contains(tokens[i]))
+                return true;
+        }
+        return false;
+    }
+
     private static readonly List<Counter> Counters_ = new List<Counter>();
     private static bool _discovered;
     private static IntPtr _lastPlayer;
@@ -92,19 +150,37 @@ public static class ResourceTracker
             if (counter.Translated || KnownLabels.ContainsKey(counter.Name))
                 continue;
 
+            string bestText = null;
+            int bestScore = 0;
             for (int k = 0; k < keys.Count; k++)
             {
                 string lower = keys[k].ToLowerInvariant();
-                if (lower != counter.Core && lower != counter.Core + "baslik" && lower != counter.Core + "başlık")
+                int score = 0;
+                if (lower == counter.Core + "baslik" || lower == counter.Core + "başlık")
+                    score = 3;
+                else if (counter.Core.Length >= 4 && lower.Contains(counter.Core) && lower.Contains("basl"))
+                    score = 2;
+                else if (lower == counter.Core)
+                    score = 1;
+                if (score == 0 || score < bestScore)
                     continue;
 
+                // Un libellé est court : les descriptions longues ne conviennent pas.
                 string text = AmmoCatalog.Translate(keys[k]);
-                if (text == null)
+                if (text == null || text.Length > 40 || text.IndexOf('\n') >= 0)
                     continue;
 
-                counter.Label = text;
+                if (score > bestScore || bestText == null || text.Length < bestText.Length)
+                {
+                    bestScore = score;
+                    bestText = text;
+                }
+            }
+
+            if (bestText != null)
+            {
+                counter.Label = bestText.Trim();
                 counter.Translated = true;
-                break;
             }
         }
     }
@@ -274,7 +350,7 @@ public static class ResourceTracker
                         continue;
                 }
 
-                if (!seen.Add(memberName))
+                if (!seen.Add(memberName) || IsExcluded(memberName))
                     continue;
 
                 Counters_.Add(new Counter
@@ -314,7 +390,7 @@ public static class ResourceTracker
     private static string Label(string name)
     {
         string known;
-        if (KnownLabels.TryGetValue(name, out known))
+        if (KnownLabels.TryGetValue(name, out known) || FallbackLabels.TryGetValue(name, out known))
             return known;
 
         string core = name;
