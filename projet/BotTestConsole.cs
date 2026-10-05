@@ -358,8 +358,8 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         if (raidSnapshot != null && raidSnapshot.Joueur != null)
         {
             int damage = raidSnapshot.Joueur.RaidHasar;
-            Row("Dégâts boss", damage.ToString("N0", CultureInfo.InvariantCulture).Replace(',', ' ')
-                + " / " + RaidWire.BossDamageCap.ToString("N0", CultureInfo.InvariantCulture).Replace(',', ' ')
+            Row("Dégâts boss", damage.ToString("N0", CultureInfo.InvariantCulture).Replace(',', '.')
+                + " / " + RaidWire.BossDamageCap.ToString("N0", CultureInfo.InvariantCulture).Replace(',', '.')
                 + (damage >= RaidWire.BossDamageCap ? "  (plafond atteint : boss ignorés)" : string.Empty));
         }
         Hint("Le type de Raid dépend du niveau (1-10 petite, 11-15 grande) ; un médaillon est requis.");
