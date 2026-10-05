@@ -73,6 +73,7 @@ public static class ResourceTracker
     private static IntPtr _lastPlayer;
     private static float _startedAt = -1f;
     private static int _labelAttempts;
+    internal static bool LanguageHookActive;
     private static float _nextLanguageCheckAt;
     private static string _languageSignature;
     private static float _nextLabelAt;
@@ -87,14 +88,31 @@ public static class ResourceTracker
         get { return _startedAt < 0f ? 0f : Time.realtimeSinceStartup - _startedAt; }
     }
 
+    // Appelé par le jeu juste après le chargement d'une langue (LanguagesManager.LoadLanguage) :
+    // les libellés déjà lus sont oubliés et relus dans la nouvelle langue.
+    internal static void OnLanguageLoaded()
+    {
+        for (int i = 0; i < Counters_.Count; i++)
+        {
+            Counters_[i].Translated = false;
+            Counters_[i].Label = Counters_[i].Name;
+        }
+        _labelAttempts = 0;
+        _nextLabelAt = Time.realtimeSinceStartup + 0.2f;
+    }
+
     /*
-     * Détection du changement de langue du jeu : le choix est enregistré par le jeu sous la clé
+     * Repli si le chargement de langue ne peut pas être intercepté : détection du changement de langue : le choix est enregistré par le jeu sous la clé
      * PlayerPrefs « language », et le texte d'une clé connue change avec la langue chargée. Dès que
      * l'un des deux change, les libellés sont relus dans la table de la nouvelle langue.
      */
     private static void CheckLanguage()
     {
         _nextLanguageCheckAt = Time.realtimeSinceStartup + 2f;
+
+        // Le jeu signale lui-même le chargement d'une langue : inutile de la surveiller.
+        if (LanguageHookActive)
+            return;
 
         string preference = string.Empty;
         try

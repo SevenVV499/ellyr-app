@@ -553,6 +553,35 @@ namespace EtatJoueurMod
         }
     }
 
+    // Chargement d'une langue par le jeu (choix avant la connexion ou changement en jeu) :
+    // on prévient le suivi des ressources pour qu'il relise les noms dans la langue choisie.
+    [HarmonyPatch(typeof(LanguagesManager), "LoadLanguage")]
+    public static class Patch_LanguagesManager_LoadLanguage
+    {
+        [HarmonyPrepare]
+        public static bool Prepare()
+        {
+            MethodInfo methode = Hooks.TrouverMethodeUnique(typeof(LanguagesManager), "LoadLanguage");
+            if (methode == null || methode.ReturnType != typeof(void))
+                return false;
+
+            ResourceTracker.LanguageHookActive = true;
+            return true;
+        }
+
+        public static void Postfix()
+        {
+            try
+            {
+                ResourceTracker.OnLanguageLoaded();
+            }
+            catch (Exception e)
+            {
+                Plugin.Logger.LogError($"[EtatJoueur] Erreur Patch_LanguagesManager_LoadLanguage : {e}");
+            }
+        }
+    }
+
     // Clic sur la mer (déplacement manuel) : la console est dessinée en IMGUI, qui ne
     // bloque pas les clics lus par le jeu. Tant que le pointeur est sur la console, le
     // gestionnaire de clic du jeu est donc sauté.
