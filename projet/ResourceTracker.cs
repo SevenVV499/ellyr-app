@@ -73,6 +73,8 @@ public static class ResourceTracker
     private static IntPtr _lastPlayer;
     private static float _startedAt = -1f;
     private static int _labelAttempts;
+    private static float _nextLanguageCheckAt;
+    private static string _languageSignature;
     private static float _nextLabelAt;
 
     public static IReadOnlyList<Counter> Counters
@@ -83,6 +85,42 @@ public static class ResourceTracker
     public static float ElapsedSeconds
     {
         get { return _startedAt < 0f ? 0f : Time.realtimeSinceStartup - _startedAt; }
+    }
+
+    /*
+     * Détection du changement de langue du jeu : le choix est enregistré par le jeu sous la clé
+     * PlayerPrefs « language », et le texte d'une clé connue change avec la langue chargée. Dès que
+     * l'un des deux change, les libellés sont relus dans la table de la nouvelle langue.
+     */
+    private static void CheckLanguage()
+    {
+        _nextLanguageCheckAt = Time.realtimeSinceStartup + 2f;
+
+        string preference = string.Empty;
+        try
+        {
+            preference = PlayerPrefs.GetString("language", string.Empty);
+        }
+        catch
+        {
+        }
+
+        string signature = preference + "|" + (AmmoCatalog.Translate("PariltiAltin") ?? string.Empty);
+        if (signature == _languageSignature)
+            return;
+
+        bool first = _languageSignature == null;
+        _languageSignature = signature;
+        if (first)
+            return;
+
+        for (int i = 0; i < Counters_.Count; i++)
+        {
+            Counters_[i].Translated = false;
+            Counters_[i].Label = Counters_[i].Name;
+        }
+        _labelAttempts = 0;
+        _nextLabelAt = Time.realtimeSinceStartup + 1f;
     }
 
     // Libellés : la traduction du jeu (LanguagesManager) quand une clé porte exactement le nom
@@ -391,6 +429,9 @@ public static class ResourceTracker
             Discover();
         if (_startedAt < 0f)
             _startedAt = Time.realtimeSinceStartup;
+
+        if (Time.realtimeSinceStartup >= _nextLanguageCheckAt)
+            CheckLanguage();
 
         if (_labelAttempts < MaxLabelAttempts && Time.realtimeSinceStartup >= _nextLabelAt)
             ResolveLabels();
