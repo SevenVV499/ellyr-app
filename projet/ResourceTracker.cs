@@ -39,55 +39,14 @@ public static class ResourceTracker
         "oyuncuSandikAnahtari", "oyuncuIcePearlSandikAnahtari"
     };
 
-    private static readonly Dictionary<string, string> KnownLabels = new Dictionary<string, string>
+    // Compteurs dont la clé de texte du jeu ne ressemble pas au nom du champ : on ne fournit que
+    // la clé ; le texte affiché est toujours celui de la table de langue du jeu (langue active).
+    private static readonly Dictionary<string, string> KeyLinks = new Dictionary<string, string>
     {
-        { "oyuncuAltin", "Or" },
-        { "playerPearl", "Perles" },
-        { "oyuncuTecrubePuan", "Expérience" },
-        { "oyuncuTilsim", "Talisman de lumière" },
-        { "oyuncuAcemiTilsim", "Talisman de Behemoth" },
-        { "oyuncuSandikAnahtari", "Clés de coffre" },
-        { "oyuncuIcePearlSandikAnahtari", "Clés de coffre (Ice Pearl)" },
-        { "oyuncuRaidHasar", "Dégâts de Raid" }
-    };
-
-    // Libellés de secours (français), utilisés quand aucune clé de la table du jeu ne convient.
-    private static readonly Dictionary<string, string> FallbackLabels = new Dictionary<string, string>
-    {
-        { "oyuncuKristal", "Cristal" },
-        { "oyuncuBarut", "Poudre" },
-        { "oyuncuAsklepios", "Compétence Asklepios" },
-        { "oyuncuProfesyonelKorsan", "Pirate Professionnel" },
-        { "oyuncuNormalKorsan", "Pirate Normal" },
-        { "oyuncuAcemiKorsan", "Pirate Novice" },
-        { "oyuncuKanaSusamis", "Soif de Sang" },
-        { "oyuncuKayipAsk", "Amour perdu" },
-        { "oyuncuSarapnelYagmuru", "Pluie d'Éclats" },
-        { "oyuncuTopGuclendirici", "Noyau de canon" },
-        { "oyuncuYavaslatici", "Feu d'Elmo" },
-        { "oyuncuRoket", "Feu Céleste" },
-        { "oyuncuHizTasi", "Pierre de Vitesse" },
-        { "oyuncuKalkan", "Armure en Acier" },
-        { "oyuncuSisDuvari", "Mur de Brouillard" },
-        { "oyuncuYardimCagrisi", "Appel SOS" },
-        { "oyuncuAmulet25k", "Amulette 25k" },
-        { "oyuncuAmulet50k", "Amulette 50k" },
-        { "oyuncuKartalGozu", "Œil d'Aigle" },
-        { "oyuncuHavaiGulle", "Boulet Feu d'Artifice" },
-        { "oyuncuKabukKiriciGulle", "Boulet Brise-Coquille" },
-        { "oyuncuKalpKiriciGulle", "Boulet Brise-Cœur" },
-        { "oyuncuOceanGulle", "Boulet Océan" },
-        { "oyuncuGuclendirilmisPatlayanGulle", "Boulet Explosif Renforcé" },
-        { "oyuncuPatlayanGulle", "Boulet Explosif" },
-        { "oyuncuBuzGulle", "Boulet de glace" },
-        { "oyuncuOyukGulle", "Boulet Creux" },
-        { "oyuncuAltinZipkin", "Harpon d'Or" },
-        { "oyuncuGumusZipkin", "Harpon d'Argent" },
-        { "oyuncuInciZipkin", "Harpon de perles" },
-        { "oyuncuMicoAltin", "Esclave Niveau 1" },
-        { "oyuncuMicoInci", "Esclave Niveau 2" },
-        { "oyuncuDumenciInci", "Barreur" },
-        { "oyuncuTopcuInci", "Canonnier" }
+        { "oyuncuAltin", "PariltiAltin" },
+        { "oyuncuTecrubePuan", "PariltiTecrubePuani" },
+        { "oyuncuTilsim", "isiktilsimibaslik" },
+        { "oyuncuAcemiTilsim", "behemothtilsimibaslik" }
     };
 
     // Compteurs qui ne sont pas des ressources (identifiants, états, emplacements, progression).
@@ -147,10 +106,26 @@ public static class ResourceTracker
         for (int i = 0; i < Counters_.Count; i++)
         {
             Counter counter = Counters_[i];
-            // Les libellés français fixés ci-dessus priment sur la table du jeu.
-            if (counter.Translated || KnownLabels.ContainsKey(counter.Name)
-                || FallbackLabels.ContainsKey(counter.Name))
+            if (counter.Translated)
                 continue;
+
+            string linkedKey;
+            if (KeyLinks.TryGetValue(counter.Name, out linkedKey))
+            {
+                for (int k = 0; k < keys.Count; k++)
+                {
+                    if (!string.Equals(keys[k], linkedKey, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    string linkedText = AmmoCatalog.Translate(keys[k]);
+                    if (linkedText != null)
+                    {
+                        counter.Label = linkedText.Trim();
+                        counter.Translated = true;
+                    }
+                    break;
+                }
+                continue;
+            }
 
             string bestText = null;
             int bestScore = 0;
@@ -189,6 +164,8 @@ public static class ResourceTracker
                 counter.Translated = true;
             }
         }
+
+        Counters_.Sort((x, y) => string.Compare(x.Label, y.Label, StringComparison.CurrentCultureIgnoreCase));
     }
 
     private static readonly HashSet<string> GenericWords = new HashSet<string>
@@ -556,40 +533,9 @@ public static class ResourceTracker
         return lower;
     }
 
+    // Sans texte du jeu, le libellé est le nom brut du compteur : aucune traduction maison.
     private static string Label(string name)
     {
-        string known;
-        if (KnownLabels.TryGetValue(name, out known) || FallbackLabels.TryGetValue(name, out known))
-            return known;
-
-        string core = name;
-        if (core.StartsWith("oyuncu", StringComparison.OrdinalIgnoreCase)
-            || core.StartsWith("player", StringComparison.OrdinalIgnoreCase))
-            core = core.Substring(6);
-
-        string label;
-        if (core.EndsWith("Gulle", StringComparison.OrdinalIgnoreCase) && core.Length > 5)
-            label = "Boulet " + Spaced(core.Substring(0, core.Length - 5));
-        else if (core.EndsWith("Zipkin", StringComparison.OrdinalIgnoreCase) && core.Length > 6)
-            label = "Harpon " + Spaced(core.Substring(0, core.Length - 6));
-        else if (core.EndsWith("Govdesi", StringComparison.OrdinalIgnoreCase) && core.Length > 7)
-            label = "Coque " + Spaced(core.Substring(0, core.Length - 7));
-        else
-            label = Spaced(core);
-
-        // Nom du jeu conservé pour les compteurs non traduits, afin de les reconnaître.
-        return label + " (" + name + ")";
-    }
-
-    private static string Spaced(string text)
-    {
-        var builder = new StringBuilder(text.Length + 4);
-        for (int i = 0; i < text.Length; i++)
-        {
-            if (i > 0 && char.IsUpper(text[i]) && !char.IsUpper(text[i - 1]))
-                builder.Append(' ');
-            builder.Append(text[i]);
-        }
-        return builder.ToString();
+        return name;
     }
 }
