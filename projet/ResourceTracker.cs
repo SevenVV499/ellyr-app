@@ -29,6 +29,8 @@ public static class ResourceTracker
         internal long Last;
         internal bool HasLast;
         internal MemberInfo Member;
+        internal string Core;
+        internal bool Translated;
     }
 
     private static readonly string[] ExplicitNames =
@@ -53,6 +55,8 @@ public static class ResourceTracker
     private static bool _discovered;
     private static IntPtr _lastPlayer;
     private static float _startedAt = -1f;
+    private static int _labelAttempts;
+    private static float _nextLabelAt;
 
     public static IReadOnlyList<Counter> Counters
     {
@@ -62,6 +66,80 @@ public static class ResourceTracker
     public static float ElapsedSeconds
     {
         get { return _startedAt < 0f ? 0f : Time.realtimeSinceStartup - _startedAt; }
+    }
+
+    // Libellés : la traduction du jeu (LanguagesManager) quand une clé porte exactement le nom
+    // du compteur (ou « <nom>baslik »). Les textes ne sont chargés qu'après la langue : on
+    // réessaie quelques fois, puis on garde le libellé de secours.
+    private const int MaxLabelAttempts = 6;
+
+    private static void ResolveLabels()
+    {
+        float now = Time.realtimeSinceStartup;
+        List<string> keys = AllLocalizationKeys();
+        if (keys.Count < 100)
+        {
+            _nextLabelAt = now + 10f;
+            return;
+        }
+
+        _labelAttempts++;
+        _nextLabelAt = now + 15f;
+
+        for (int i = 0; i < Counters_.Count; i++)
+        {
+            Counter counter = Counters_[i];
+            if (counter.Translated || KnownLabels.ContainsKey(counter.Name))
+                continue;
+
+            for (int k = 0; k < keys.Count; k++)
+            {
+                string lower = keys[k].ToLowerInvariant();
+                if (lower != counter.Core && lower != counter.Core + "baslik" && lower != counter.Core + "başlık")
+                    continue;
+
+                string text = AmmoCatalog.Translate(keys[k]);
+                if (text == null)
+                    continue;
+
+                counter.Label = text;
+                counter.Translated = true;
+                break;
+            }
+        }
+    }
+
+    private static List<string> AllLocalizationKeys()
+    {
+        var result = new List<string>();
+        foreach (KeyValuePair<string, List<string>> pair in AmmoCatalog.ReadLocalizationKeys())
+            result.AddRange(pair.Value);
+        return result;
+    }
+
+    // Rapport pour la traduction : compteur | libellé actuel | clés contenant son nom = texte du jeu.
+    public static string TranslationReport()
+    {
+        ResolveLabels();
+        List<string> keys = AllLocalizationKeys();
+        var builder = new StringBuilder();
+        for (int i = 0; i < Counters_.Count; i++)
+        {
+            Counter counter = Counters_[i];
+            builder.Append(counter.Name).Append(" | ").Append(counter.Label).Append(" | ");
+            int found = 0;
+            for (int k = 0; k < keys.Count && found < 8; k++)
+            {
+                if (keys[k].ToLowerInvariant().IndexOf(counter.Core, StringComparison.Ordinal) < 0)
+                    continue;
+                string text = AmmoCatalog.Translate(keys[k]);
+                builder.Append(found > 0 ? " ; " : string.Empty).Append(keys[k]).Append('=')
+                    .Append(text == null ? "?" : text.Replace('\n', ' '));
+                found++;
+            }
+            builder.Append('\n');
+        }
+        return builder.ToString();
     }
 
     // Liste brute des compteurs repérés (nom du jeu, un par ligne), pour la traduction.
@@ -91,6 +169,9 @@ public static class ResourceTracker
             Discover();
         if (_startedAt < 0f)
             _startedAt = Time.realtimeSinceStartup;
+
+        if (_labelAttempts < MaxLabelAttempts && Time.realtimeSinceStartup >= _nextLabelAt)
+            ResolveLabels();
 
         // Nouveau Player (reconnexion, changement de scène) : les lectures qui suivent ne
         // servent que de nouvelle référence, sans ajouter de variation.
@@ -200,7 +281,8 @@ public static class ResourceTracker
                 {
                     Name = memberName,
                     Label = Label(memberName),
-                    Member = member
+                    Member = member,
+                    Core = Key(memberName)
                 });
             }
 

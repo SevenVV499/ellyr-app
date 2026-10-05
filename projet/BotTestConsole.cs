@@ -360,6 +360,11 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             GUIUtility.systemCopyBuffer = ResourceTracker.RawNames();
             _resourcesCopied = ResourceTracker.Counters.Count;
         }
+        if (GUILayout.Button("Copier la liste avec les traductions du jeu", _sBtn, GUILayout.Height(26f)))
+        {
+            GUIUtility.systemCopyBuffer = ResourceTracker.TranslationReport();
+            _resourcesCopied = ResourceTracker.Counters.Count;
+        }
         if (_resourcesCopied >= 0)
             Hint(_resourcesCopied + " noms de compteurs copiés dans le presse-papiers.");
         EndCard();

@@ -182,7 +182,41 @@ namespace EtatJoueurMod
             return itemProperty != null && itemProperty.GetIndexParameters().Length == 1;
         }
 
-        private static Dictionary<string, List<string>> ReadLocalizationKeys()
+        // Texte traduit d'une clé de localisation (langue active du jeu), ou null si la clé
+        // est inconnue, vide ou renvoyée telle quelle (traduction pas encore chargée).
+        internal static string Translate(string key)
+        {
+            try
+            {
+                Type managerType = typeof(LanguagesManager);
+                const BindingFlags staticFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
+                PropertyInfo instanceProperty = managerType.GetProperty("Instance", staticFlags);
+                object manager = instanceProperty == null ? null : instanceProperty.GetValue(null, null);
+                if (manager == null)
+                    return null;
+
+                MethodInfo getText = managerType.GetMethod(
+                    "GetText",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                    null,
+                    new[] { typeof(string) },
+                    null);
+                if (getText == null)
+                    return null;
+
+                string text = getText.Invoke(manager, new object[] { key }) as string;
+                if (string.IsNullOrWhiteSpace(text)
+                    || string.Equals(text, key, StringComparison.OrdinalIgnoreCase))
+                    return null;
+                return text;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        internal static Dictionary<string, List<string>> ReadLocalizationKeys()
         {
             var result = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
             try
