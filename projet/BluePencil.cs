@@ -610,9 +610,12 @@ public sealed class BluePencil
                     AmmoId = ResolveAmmo(weaponCategory, pnj.Nom),
                     Portee = pnj.Portee
                 };
+                // Boss prioritaires : le plus faible en PV d'abord (à PV égaux, le plus proche) ;
+                // les autres cibles : le plus proche.
                 if (best == null
                     || priority && !bestIsPriority
-                    || priority == bestIsPriority && IsCloser(candidate, best))
+                    || priority == bestIsPriority
+                        && (priority ? IsWeaker(candidate, best) : IsCloser(candidate, best)))
                 {
                     best = candidate;
                     bestIsPriority = priority;
@@ -915,6 +918,14 @@ public sealed class BluePencil
         return TargetCatalog.TryGetCategory(pnj.Nom, out category);
     }
 
+    /*
+     * Raid, boss prioritaires : le combat en cours est abandonné quand
+     *  - il vise un mob alors qu'un boss est engageable ;
+     *  - il vise un boss alors qu'un autre boss engageable a strictement moins de PV
+     *    (à PV égaux on ne change pas : pas d'aller-retour entre deux boss pleins).
+     * Le candidat est choisi par ObtenirCombatCandidat, donc avec les mêmes filtres que
+     * la sélection d'une nouvelle cible.
+     */
     private bool PriorityPreemptsActiveCombat(EtatJeuSnapshot snapshot, BehaviorAction active)
     {
         if (_raidPriorityPnj == null || snapshot.Pnjs == null)
@@ -925,19 +936,38 @@ public sealed class BluePencil
         if (engaged == null || engaged.Kind != CombatTargetKind.NetworkId)
             return false;
 
-        bool bossVisible = false;
+        CombatTarget best = ObtenirCombatCandidat(snapshot);
+        if (best == null || best.Kind != CombatTargetKind.NetworkId || best.NetId == engaged.NetId)
+            return false;
+
+        PnjInfo bestPnj = null;
+        PnjInfo engagedPnj = null;
         for (int i = 0; i < snapshot.Pnjs.Count; i++)
         {
             PnjInfo pnj = snapshot.Pnjs[i];
-            if (pnj == null || pnj.Vie <= 0 || !_raidPriorityPnj(pnj))
+            if (pnj == null)
                 continue;
-            // Le combat en cours vise déjà un boss : rien à préempter.
-            if (pnj.Id == engaged.NetId)
-                return false;
-            if (!IsInvalidDistance(pnj.Distance))
-                bossVisible = true;
+            if (pnj.Id == best.NetId)
+                bestPnj = pnj;
+            else if (pnj.Id == engaged.NetId)
+                engagedPnj = pnj;
         }
-        return bossVisible;
+
+        if (bestPnj == null || !_raidPriorityPnj(bestPnj))
+            return false;
+
+        // Le combat en cours vise un mob (ou une cible disparue) : le boss prend le pas.
+        if (engagedPnj == null || !_raidPriorityPnj(engagedPnj))
+            return true;
+
+        // Les deux sont des boss : on ne change que pour un boss strictement plus faible.
+        return bestPnj.Vie < engagedPnj.Vie;
+    }
+
+    private static bool IsWeaker(CombatTarget candidate, CombatTarget current)
+    {
+        return candidate.Health < current.Health
+            || candidate.Health == current.Health && candidate.Distance < current.Distance;
     }
 
     private static bool IsCloser(CombatTarget candidate, CombatTarget current)
