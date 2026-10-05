@@ -919,12 +919,9 @@ public sealed class BluePencil
     }
 
     /*
-     * Raid, boss prioritaires : le combat en cours est abandonné quand
-     *  - il vise un mob alors qu'un boss est engageable ;
-     *  - il vise un boss alors qu'un autre boss engageable a strictement moins de PV
-     *    (à PV égaux on ne change pas : pas d'aller-retour entre deux boss pleins).
-     * Le candidat est choisi par ObtenirCombatCandidat, donc avec les mêmes filtres que
-     * la sélection d'une nouvelle cible.
+     * Raid, boss prioritaires : le combat en cours est abandonné dès que le meilleur candidat
+     * (ObtenirCombatCandidat : boss d'abord, le moins de PV, puis le plus proche) est un boss
+     * différent de la cible engagée. Mêmes filtres que la sélection d'une nouvelle cible.
      */
     private bool PriorityPreemptsActiveCombat(EtatJeuSnapshot snapshot, BehaviorAction active)
     {
@@ -941,27 +938,20 @@ public sealed class BluePencil
             return false;
 
         PnjInfo bestPnj = null;
-        PnjInfo engagedPnj = null;
         for (int i = 0; i < snapshot.Pnjs.Count; i++)
         {
             PnjInfo pnj = snapshot.Pnjs[i];
-            if (pnj == null)
-                continue;
-            if (pnj.Id == best.NetId)
+            if (pnj != null && pnj.Id == best.NetId)
+            {
                 bestPnj = pnj;
-            else if (pnj.Id == engaged.NetId)
-                engagedPnj = pnj;
+                break;
+            }
         }
 
         if (bestPnj == null || !_raidPriorityPnj(bestPnj))
             return false;
 
-        // Le combat en cours vise un mob (ou une cible disparue) : le boss prend le pas.
-        if (engagedPnj == null || !_raidPriorityPnj(engagedPnj))
-            return true;
-
-        // Les deux sont des boss : on ne change que pour un boss strictement plus faible.
-        return bestPnj.Vie < engagedPnj.Vie;
+        return true;
     }
 
     private static bool IsWeaker(CombatTarget candidate, CombatTarget current)
