@@ -64,6 +64,15 @@ public static class ResourceTracker
         get { return _startedAt < 0f ? 0f : Time.realtimeSinceStartup - _startedAt; }
     }
 
+    // Liste brute des compteurs repérés (nom du jeu, un par ligne), pour la traduction.
+    public static string RawNames()
+    {
+        var builder = new StringBuilder();
+        for (int i = 0; i < Counters_.Count; i++)
+            builder.Append(Counters_[i].Name).Append('\n');
+        return builder.ToString();
+    }
+
     // Remise à zéro demandée par l'utilisateur : les variations repartent de 0.
     public static void Reset()
     {

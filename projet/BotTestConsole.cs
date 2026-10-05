@@ -66,6 +66,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private Vector2 _dragOffset;
     private int _activeTab;
     private bool _resourcesShowAll;
+    private int _resourcesCopied = -1;
     private bool _collectEnabled;
     private bool _combatEnabled;
     private IReadOnlyList<Type> _cachedCollectibleCatalog;
@@ -354,6 +355,13 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         _resourcesShowAll = Switch(_resourcesShowAll, "Afficher tous les compteurs");
         if (GUILayout.Button("Remise à zéro", _sBtn, GUILayout.Height(26f)))
             ResourceTracker.Reset();
+        if (GUILayout.Button("Copier la liste brute des compteurs", _sBtn, GUILayout.Height(26f)))
+        {
+            GUIUtility.systemCopyBuffer = ResourceTracker.RawNames();
+            _resourcesCopied = ResourceTracker.Counters.Count;
+        }
+        if (_resourcesCopied >= 0)
+            Hint(_resourcesCopied + " noms de compteurs copiés dans le presse-papiers.");
         EndCard();
 
         BeginCard("Compteurs");
