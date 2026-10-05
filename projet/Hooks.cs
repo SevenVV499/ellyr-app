@@ -316,6 +316,7 @@ namespace EtatJoueurMod
                     if (GameState.JoueurLocal != null)
                     {
                         GameState.PreparerEtEnvoyerInstantane();
+                        ResourceTracker.Sample(__instance);
                     }
                 }
             }

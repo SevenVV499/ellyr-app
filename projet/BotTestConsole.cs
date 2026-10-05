@@ -16,10 +16,11 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private const int TabTargets = 2;
     private const int TabCollect = 3;
     private const int TabRaid = 4;
-    private const int TabStatus = 5;
-    private const int TabEvents = 6;
+    private const int TabResources = 5;
+    private const int TabStatus = 6;
+    private const int TabEvents = 7;
     private static readonly string[] TabLabels =
-        { "Contrôle", "Survie", "Cibles", "Collecte", "Carte Raid", "État", "Événements" };
+        { "Contrôle", "Survie", "Cibles", "Collecte", "Carte Raid", "Ressources", "État", "Événements" };
 
     private const float HeaderHeight = 44f;
     private const float TabBarHeight = 34f;
@@ -64,6 +65,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     public static bool PointerOverConsole { get { return _pointerOverConsole; } }
     private Vector2 _dragOffset;
     private int _activeTab;
+    private bool _resourcesShowAll;
     private bool _collectEnabled;
     private bool _combatEnabled;
     private IReadOnlyList<Type> _cachedCollectibleCatalog;
@@ -157,6 +159,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             case TabTargets: DrawTargetsTab(); break;
             case TabCollect: DrawCollectTab(); break;
             case TabRaid: DrawRaidTab(); break;
+            case TabResources: DrawResourcesTab(); break;
             case TabEvents: DrawEventsTab(); break;
             default: DrawStatusTab(); break;
         }
@@ -340,6 +343,59 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             ? "Seuls les NPC et monstres à PV max sont engagés ; les cibles déjà entamées sont ignorées."
             : "Toutes les cibles sélectionnées peuvent être engagées, même déjà entamées.");
         EndCard();
+    }
+
+    private void DrawResourcesTab()
+    {
+        float elapsed = ResourceTracker.ElapsedSeconds;
+
+        BeginCard("Ressources", "Variation nette depuis la dernière remise à zéro (gains moins dépenses).");
+        Row("Durée", FormatDuration(elapsed));
+        _resourcesShowAll = Switch(_resourcesShowAll, "Afficher tous les compteurs");
+        if (GUILayout.Button("Remise à zéro", _sBtn, GUILayout.Height(26f)))
+            ResourceTracker.Reset();
+        EndCard();
+
+        BeginCard("Compteurs");
+        IReadOnlyList<ResourceTracker.Counter> counters = ResourceTracker.Counters;
+        int shown = 0;
+        for (int i = 0; i < counters.Count; i++)
+        {
+            ResourceTracker.Counter counter = counters[i];
+            if (!_resourcesShowAll && counter.Total == 0)
+                continue;
+
+            shown++;
+            string perHour = elapsed < 60f
+                ? "-"
+                : FormatSigned((long)(counter.Total / (elapsed / 3600f))) + " /h";
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(counter.Label, _sLabel, GUILayout.Width(260f));
+            GUILayout.Label(FormatSigned(counter.Total), _sValue, GUILayout.Width(130f));
+            GUILayout.Label(perHour, _sMuted);
+            GUILayout.EndHorizontal();
+        }
+
+        if (counters.Count == 0)
+            Hint("En attente des compteurs du joueur.");
+        else if (shown == 0)
+            Hint("Aucun compteur n'a bougé depuis la remise à zéro.");
+        EndCard();
+    }
+
+    private static string FormatSigned(long value)
+    {
+        string digits = Math.Abs(value).ToString("N0", CultureInfo.InvariantCulture).Replace(',', '.');
+        return value > 0 ? "+" + digits : value < 0 ? "-" + digits : digits;
+    }
+
+    private static string FormatDuration(float seconds)
+    {
+        int total = (int)seconds;
+        return (total / 3600).ToString(CultureInfo.InvariantCulture) + " h "
+            + ((total % 3600) / 60).ToString("00", CultureInfo.InvariantCulture) + " min "
+            + (total % 60).ToString("00", CultureInfo.InvariantCulture) + " s";
     }
 
     private void DrawRaidTab()

@@ -1,0 +1,258 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Reflection;
+using System.Text;
+using UnityEngine;
+
+/*
+ * Suivi des ressources : variation nette de chaque compteur numérique du joueur (or, perles,
+ * boulets, harpons, coques, bonus, talismans...) depuis la dernière remise à zéro.
+ *
+ * Les compteurs sont découverts automatiquement par réflexion sur Player : propriété ou champ
+ * int/long dont le nom commence par « oyuncu » ou « player » et qui possède un setter
+ * « SetOyuncu... / SetPlayer... » (le jeu met ces compteurs à jour par ces setters), plus
+ * quelques noms explicites dont le setter a une orthographe différente.
+ *
+ * Le total est la somme des variations observées entre deux lectures : un changement de
+ * Player (reconnexion) ne fausse donc rien, la première lecture sert seulement de référence.
+ * Les valeurs restent d'une session à l'autre ; seule la remise à zéro les efface.
+ */
+public static class ResourceTracker
+{
+    public sealed class Counter
+    {
+        public string Name;
+        public string Label;
+        public long Total;
+        internal long Last;
+        internal bool HasLast;
+        internal MemberInfo Member;
+    }
+
+    private static readonly string[] ExplicitNames =
+    {
+        "oyuncuAltin", "playerPearl", "oyuncuTecrubePuan", "oyuncuTilsim", "oyuncuAcemiTilsim",
+        "oyuncuSandikAnahtari", "oyuncuIcePearlSandikAnahtari"
+    };
+
+    private static readonly Dictionary<string, string> KnownLabels = new Dictionary<string, string>
+    {
+        { "oyuncuAltin", "Or" },
+        { "playerPearl", "Perles" },
+        { "oyuncuTecrubePuan", "Expérience" },
+        { "oyuncuTilsim", "Talisman de lumière" },
+        { "oyuncuAcemiTilsim", "Talisman de Behemoth" },
+        { "oyuncuSandikAnahtari", "Clés de coffre" },
+        { "oyuncuIcePearlSandikAnahtari", "Clés de coffre (Ice Pearl)" },
+        { "oyuncuRaidHasar", "Dégâts de Raid" }
+    };
+
+    private static readonly List<Counter> Counters_ = new List<Counter>();
+    private static bool _discovered;
+    private static IntPtr _lastPlayer;
+    private static float _startedAt = -1f;
+
+    public static IReadOnlyList<Counter> Counters
+    {
+        get { return Counters_; }
+    }
+
+    public static float ElapsedSeconds
+    {
+        get { return _startedAt < 0f ? 0f : Time.realtimeSinceStartup - _startedAt; }
+    }
+
+    // Remise à zéro demandée par l'utilisateur : les variations repartent de 0.
+    public static void Reset()
+    {
+        for (int i = 0; i < Counters_.Count; i++)
+            Counters_[i].Total = 0;
+        _startedAt = Time.realtimeSinceStartup;
+    }
+
+    // Appelé à chaque instantané avec le joueur local.
+    public static void Sample(Player player)
+    {
+        if (player == null)
+            return;
+
+        if (!_discovered)
+            Discover();
+        if (_startedAt < 0f)
+            _startedAt = Time.realtimeSinceStartup;
+
+        // Nouveau Player (reconnexion, changement de scène) : les lectures qui suivent ne
+        // servent que de nouvelle référence, sans ajouter de variation.
+        if (player.Pointer != _lastPlayer)
+        {
+            _lastPlayer = player.Pointer;
+            for (int i = 0; i < Counters_.Count; i++)
+                Counters_[i].HasLast = false;
+        }
+
+        for (int i = 0; i < Counters_.Count; i++)
+        {
+            Counter counter = Counters_[i];
+            long value;
+            if (!TryRead(counter.Member, player, out value))
+                continue;
+
+            if (counter.HasLast)
+                counter.Total += value - counter.Last;
+            counter.Last = value;
+            counter.HasLast = true;
+        }
+    }
+
+    private static bool TryRead(MemberInfo member, Player player, out long value)
+    {
+        value = 0;
+        try
+        {
+            object raw;
+            PropertyInfo property = member as PropertyInfo;
+            if (property != null)
+                raw = property.GetValue(player, null);
+            else
+                raw = ((FieldInfo)member).GetValue(player);
+
+            if (raw == null)
+                return false;
+            value = Convert.ToInt64(raw, CultureInfo.InvariantCulture);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static void Discover()
+    {
+        _discovered = true;
+        try
+        {
+            Type type = typeof(Player);
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly;
+
+            var setterKeys = new HashSet<string>();
+            foreach (MethodInfo method in type.GetMethods(flags))
+            {
+                string name = method.Name;
+                if (!name.StartsWith("Set", StringComparison.Ordinal) || name.Length <= 3)
+                    continue;
+                ParameterInfo[] parameters = method.GetParameters();
+                if (parameters.Length != 1
+                    || parameters[0].ParameterType != typeof(int) && parameters[0].ParameterType != typeof(long))
+                    continue;
+                setterKeys.Add(Key(name.Substring(3)));
+            }
+
+            var seen = new HashSet<string>();
+            foreach (MemberInfo member in type.GetMembers(flags))
+            {
+                Type valueType;
+                PropertyInfo property = member as PropertyInfo;
+                FieldInfo field = member as FieldInfo;
+                if (property != null)
+                {
+                    if (!property.CanRead || property.GetIndexParameters().Length != 0)
+                        continue;
+                    valueType = property.PropertyType;
+                }
+                else if (field != null)
+                {
+                    valueType = field.FieldType;
+                }
+                else
+                {
+                    continue;
+                }
+
+                if (valueType != typeof(int) && valueType != typeof(long))
+                    continue;
+
+                string memberName = member.Name;
+                bool isExplicit = Array.IndexOf(ExplicitNames, memberName) >= 0;
+                if (!isExplicit)
+                {
+                    if (!StartsWithAny(memberName, "oyuncu", "player"))
+                        continue;
+                    if (!setterKeys.Contains(Key(memberName)))
+                        continue;
+                }
+
+                if (!seen.Add(memberName))
+                    continue;
+
+                Counters_.Add(new Counter
+                {
+                    Name = memberName,
+                    Label = Label(memberName),
+                    Member = member
+                });
+            }
+
+            Counters_.Sort((a, b) => string.Compare(a.Label, b.Label, StringComparison.CurrentCultureIgnoreCase));
+        }
+        catch (Exception e)
+        {
+            Plugin.Logger.LogError("[ResourceTracker] Découverte des compteurs impossible : " + e);
+        }
+    }
+
+    private static bool StartsWithAny(string value, string a, string b)
+    {
+        return value.StartsWith(a, StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith(b, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Clé de rapprochement entre un compteur et son setter : minuscules, sans préfixe.
+    private static string Key(string name)
+    {
+        string lower = name.ToLowerInvariant();
+        if (lower.StartsWith("oyuncu", StringComparison.Ordinal))
+            return lower.Substring(6);
+        if (lower.StartsWith("player", StringComparison.Ordinal))
+            return lower.Substring(6);
+        return lower;
+    }
+
+    private static string Label(string name)
+    {
+        string known;
+        if (KnownLabels.TryGetValue(name, out known))
+            return known;
+
+        string core = name;
+        if (core.StartsWith("oyuncu", StringComparison.OrdinalIgnoreCase)
+            || core.StartsWith("player", StringComparison.OrdinalIgnoreCase))
+            core = core.Substring(6);
+
+        string label;
+        if (core.EndsWith("Gulle", StringComparison.OrdinalIgnoreCase) && core.Length > 5)
+            label = "Boulet " + Spaced(core.Substring(0, core.Length - 5));
+        else if (core.EndsWith("Zipkin", StringComparison.OrdinalIgnoreCase) && core.Length > 6)
+            label = "Harpon " + Spaced(core.Substring(0, core.Length - 6));
+        else if (core.EndsWith("Govdesi", StringComparison.OrdinalIgnoreCase) && core.Length > 7)
+            label = "Coque " + Spaced(core.Substring(0, core.Length - 7));
+        else
+            label = Spaced(core);
+
+        // Nom du jeu conservé pour les compteurs non traduits, afin de les reconnaître.
+        return label + " (" + name + ")";
+    }
+
+    private static string Spaced(string text)
+    {
+        var builder = new StringBuilder(text.Length + 4);
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (i > 0 && char.IsUpper(text[i]) && !char.IsUpper(text[i - 1]))
+                builder.Append(' ');
+            builder.Append(text[i]);
+        }
+        return builder.ToString();
+    }
+}
