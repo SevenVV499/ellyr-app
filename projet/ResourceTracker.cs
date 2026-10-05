@@ -39,14 +39,39 @@ public static class ResourceTracker
         "oyuncuSandikAnahtari", "oyuncuIcePearlSandikAnahtari"
     };
 
-    // Compteurs dont la clé de texte du jeu ne ressemble pas au nom du champ : on ne fournit que
-    // la clé ; le texte affiché est toujours celui de la table de langue du jeu (langue active).
+    // Liens compteur -> clé de texte du jeu, établis dans le code du jeu (écrans, setters, notifications).
+    // Le texte affiché est toujours celui de la table de langue du jeu (langue active).
     private static readonly Dictionary<string, string> KeyLinks = new Dictionary<string, string>
     {
         { "oyuncuAltin", "PariltiAltin" },
         { "oyuncuTecrubePuan", "PariltiTecrubePuani" },
         { "oyuncuTilsim", "isiktilsimibaslik" },
-        { "oyuncuAcemiTilsim", "behemothtilsimibaslik" }
+        { "oyuncuAcemiTilsim", "behemothtilsimibaslik" },
+        { "playerPearl", "InciBaslik" },
+        { "oyuncuKartalGozu", "KARTALgozu" },
+        { "oyuncuGuclendirilmisSarapnelGulle", "GucluSarapnelBaslik" },
+        { "oyuncuSandikAnahtari", "sandikanahataria" },
+        { "oyuncuIcePearlSandikAnahtari", "sandikanahataria2" },
+        { "oyuncuHavaiGulle", "winGulleHavaiBaslik" },
+        { "oyuncuKalkan", "winKalkanBaslik" },
+        { "oyuncuInciZipkin", "InciHarpoon" },
+        { "oyuncuMicoInci", "micoInciBaslik" },
+        { "oyuncuMicoAltin", "micoAltinBaslik" }
+    };
+
+    // Compteurs sans lien établi avec une clé de nom : on affiche leur nom brut, sans rapprochement.
+    private static readonly HashSet<string> NoLink = new HashSet<string>
+    {
+        "oyuncuAmulet25k", "oyuncuAmulet50k", "oyuncuOzgurlukGulle", "oyuncuCoin",
+        "oyuncuDumenciAltin", "oyuncuTopcuAltin", "oyuncuGuverteMojo", "oyuncuguverteNimet",
+        "oyuncuGuverte1", "oyuncuGuverte2", "oyuncuGuverte3", "oyuncuGuverte4", "oyuncuGuverte5",
+        "oyuncuGuverte6", "oyuncuGuverte7", "oyuncuGuverte8",
+        "oyuncuInciPaket1", "oyuncuInciPaket2", "oyuncuInciPaket3", "oyuncuInciPaket4",
+        "oyuncuInciPaket5", "oyuncuInciPaket6", "oyuncuInciPaket7", "oyuncuInciPaket8",
+        "oyuncuInciPaket9", "oyuncuInciPaket10", "oyuncuInciPaket11", "oyuncuInciPaket12",
+        "oyuncuOzgurlukPaket1", "oyuncuOzgurlukPaket2", "oyuncuOzgurlukPaket3",
+        "oyuncuTopPaket1", "oyuncuTopPaket2", "playerGoldShip1", "playerGoldShip3",
+        "oyuncuOzelGemi1", "oyuncuOzelGemi2", "oyuncuOzelGemi3", "oyuncuRaidHasar", "playerDamageNpc"
     };
 
     // Compteurs qui ne sont pas des ressources (identifiants, états, emplacements, progression).
@@ -162,7 +187,7 @@ public static class ResourceTracker
         for (int i = 0; i < Counters_.Count; i++)
         {
             Counter counter = Counters_[i];
-            if (counter.Translated)
+            if (counter.Translated || NoLink.Contains(counter.Name))
                 continue;
 
             string linkedKey;
