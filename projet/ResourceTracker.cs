@@ -180,12 +180,109 @@ public static class ResourceTracker
                 }
             }
 
+            if (bestText == null)
+                bestText = ResolveByDistinctiveWord(counter, keys);
+
             if (bestText != null)
             {
                 counter.Label = bestText.Trim();
                 counter.Translated = true;
             }
         }
+    }
+
+    private static readonly HashSet<string> GenericWords = new HashSet<string>
+    {
+        "gulle", "paket", "puan", "sandik", "tasinan", "teslim", "ship", "oyuncu", "player"
+    };
+
+    /*
+     * Second essai quand aucune clé ne porte le nom entier : les titres sont parfois écrits avec
+     * seulement le mot distinctif du nom (« cilalibaslik » pour CilaliTufek, « futboltopucbaslik »
+     * pour FutbolTopuGulle). On retient un titre seulement s'il est sans ambiguïté :
+     *  - le mot distinctif est rare dans la table (pas « guverte », présent partout) ;
+     *  - le niveau (altin / inci) du compteur figure aussi dans la clé ;
+     *  - un seul texte candidat, ou un seul qui contient le plus de mots du nom.
+     * Les noms terminés par un chiffre et les paquets (Paket) ne sont jamais traités ainsi.
+     */
+    private static string ResolveByDistinctiveWord(Counter counter, List<string> keys)
+    {
+        string lowerName = counter.Name.ToLowerInvariant();
+        if (lowerName.Contains("paket") || char.IsDigit(lowerName[lowerName.Length - 1]))
+            return null;
+
+        var mainWords = new List<string>();
+        var tiers = new List<string>();
+        foreach (string word in Words(counter.Name, 4))
+        {
+            if (GenericWords.Contains(word))
+                continue;
+            if (word == "altin" || word == "inci")
+                tiers.Add(word);
+            else
+                mainWords.Add(word);
+        }
+        if (mainWords.Count == 0)
+            return null;
+
+        string first = mainWords[0];
+        int rarity = 0;
+        var matches = new List<string[]>();
+        for (int k = 0; k < keys.Count; k++)
+        {
+            string lower = keys[k].ToLowerInvariant();
+            if (!lower.Contains(first))
+                continue;
+            rarity++;
+            if (!lower.Contains("basl") || HasNoisyToken(lower))
+                continue;
+
+            bool tiersOk = true;
+            for (int t = 0; t < tiers.Count; t++)
+                tiersOk &= lower.Contains(tiers[t]);
+            if (!tiersOk)
+                continue;
+
+            string text = AmmoCatalog.Translate(keys[k]);
+            if (text == null || text.Length > 40 || text.IndexOf('\n') >= 0)
+                continue;
+
+            int matched = 0;
+            for (int w = 0; w < mainWords.Count; w++)
+            {
+                if (lower.Contains(mainWords[w]))
+                    matched++;
+            }
+            // Plus de mots du nom = meilleur ; à égalité, la clé qui commence par le mot distinctif.
+            int score = matched * 2 + (lower.StartsWith(first, StringComparison.Ordinal) ? 1 : 0);
+            matches.Add(new[] { text.Trim(), score.ToString(CultureInfo.InvariantCulture) });
+        }
+
+        if (rarity > 8 || matches.Count == 0)
+            return null;
+        // Nom à plusieurs mots distinctifs : un titre qui n'en contient qu'un seul (comme « guclendirilmis »)
+        // peut appartenir à un autre objet ; on l'accepte seulement si ce mot est très rare.
+        bool bestHasTwoWords = false;
+        for (int i = 0; i < matches.Count; i++)
+            bestHasTwoWords |= int.Parse(matches[i][1], CultureInfo.InvariantCulture) >= 4;
+        if (mainWords.Count >= 2 && !bestHasTwoWords && rarity > 4)
+            return null;
+
+        int bestMatched = 0;
+        for (int i = 0; i < matches.Count; i++)
+            bestMatched = Math.Max(bestMatched, int.Parse(matches[i][1], CultureInfo.InvariantCulture));
+
+        string chosen = null;
+        for (int i = 0; i < matches.Count; i++)
+        {
+            if (int.Parse(matches[i][1], CultureInfo.InvariantCulture) != bestMatched)
+                continue;
+            if (chosen == null)
+                chosen = matches[i][0];
+            else if (!string.Equals(chosen, matches[i][0], StringComparison.OrdinalIgnoreCase))
+                return null;
+        }
+        return chosen;
     }
 
     // Clés de dégâts, quantités, prix, descriptions... : jamais un nom d'objet.
@@ -255,7 +352,7 @@ public static class ResourceTracker
         return builder.ToString();
     }
 
-    private static List<string> Words(string name)
+    private static List<string> Words(string name, int minLength = 5)
     {
         string core = name;
         if (core.StartsWith("oyuncu", StringComparison.OrdinalIgnoreCase)
@@ -268,15 +365,26 @@ public static class ResourceTracker
         {
             if (i > 0 && char.IsUpper(core[i]) && !char.IsUpper(core[i - 1]) && current.Length > 0)
             {
-                if (current.Length >= 5)
-                    words.Add(current.ToString().ToLowerInvariant());
+                if (current.Length >= minLength)
+                    words.Add(StripDigits(current.ToString()).ToLowerInvariant());
                 current.Clear();
             }
             current.Append(core[i]);
         }
-        if (current.Length >= 5)
-            words.Add(current.ToString().ToLowerInvariant());
+        if (current.Length >= minLength)
+            words.Add(StripDigits(current.ToString()).ToLowerInvariant());
         return words;
+    }
+
+    private static string StripDigits(string value)
+    {
+        var builder = new StringBuilder(value.Length);
+        for (int i = 0; i < value.Length; i++)
+        {
+            if (!char.IsDigit(value[i]))
+                builder.Append(value[i]);
+        }
+        return builder.ToString();
     }
 
     // Liste brute des compteurs repérés (nom du jeu, un par ligne), pour la traduction.
