@@ -147,7 +147,9 @@ public static class ResourceTracker
         for (int i = 0; i < Counters_.Count; i++)
         {
             Counter counter = Counters_[i];
-            if (counter.Translated || KnownLabels.ContainsKey(counter.Name))
+            // Les libellés français fixés ci-dessus priment sur la table du jeu.
+            if (counter.Translated || KnownLabels.ContainsKey(counter.Name)
+                || FallbackLabels.ContainsKey(counter.Name))
                 continue;
 
             string bestText = null;
@@ -158,7 +160,8 @@ public static class ResourceTracker
                 int score = 0;
                 if (lower == counter.Core + "baslik" || lower == counter.Core + "başlık")
                     score = 3;
-                else if (counter.Core.Length >= 4 && lower.Contains(counter.Core) && lower.Contains("basl"))
+                else if (counter.Core.Length >= 4 && lower.Contains(counter.Core) && lower.Contains("basl")
+                    && !HasNoisyToken(lower))
                     score = 2;
                 else if (lower == counter.Core)
                     score = 1;
@@ -183,6 +186,21 @@ public static class ResourceTracker
                 counter.Translated = true;
             }
         }
+    }
+
+    // Clés de dégâts, quantités, prix, descriptions... : jamais un nom d'objet.
+    private static bool HasNoisyToken(string lowerKey)
+    {
+        string[] tokens =
+        {
+            "hasar", "adet", "fiyat", "aciklama", "ozellika", "bilgi", "vip", "acik", "odul", "kazan"
+        };
+        for (int i = 0; i < tokens.Length; i++)
+        {
+            if (lowerKey.Contains(tokens[i]))
+                return true;
+        }
+        return false;
     }
 
     private static List<string> AllLocalizationKeys()
@@ -213,9 +231,52 @@ public static class ResourceTracker
                     .Append(text == null ? "?" : text.Replace('\n', ' '));
                 found++;
             }
+            if (found == 0)
+            {
+                // Aucune clé ne porte le nom entier : candidats par mot du nom (au moins 5 lettres).
+                foreach (string word in Words(counter.Name))
+                {
+                    int wordFound = 0;
+                    for (int k = 0; k < keys.Count && wordFound < 6; k++)
+                    {
+                        if (keys[k].ToLowerInvariant().IndexOf(word, StringComparison.Ordinal) < 0)
+                            continue;
+                        string text = AmmoCatalog.Translate(keys[k]);
+                        if (text == null || text.Length > 60)
+                            continue;
+                        builder.Append(wordFound == 0 ? " [" + word + "] " : " ; ").Append(keys[k]).Append('=')
+                            .Append(text.Replace('\n', ' '));
+                        wordFound++;
+                    }
+                }
+            }
             builder.Append('\n');
         }
         return builder.ToString();
+    }
+
+    private static List<string> Words(string name)
+    {
+        string core = name;
+        if (core.StartsWith("oyuncu", StringComparison.OrdinalIgnoreCase)
+            || core.StartsWith("player", StringComparison.OrdinalIgnoreCase))
+            core = core.Substring(6);
+
+        var words = new List<string>();
+        var current = new StringBuilder();
+        for (int i = 0; i < core.Length; i++)
+        {
+            if (i > 0 && char.IsUpper(core[i]) && !char.IsUpper(core[i - 1]) && current.Length > 0)
+            {
+                if (current.Length >= 5)
+                    words.Add(current.ToString().ToLowerInvariant());
+                current.Clear();
+            }
+            current.Append(core[i]);
+        }
+        if (current.Length >= 5)
+            words.Add(current.ToString().ToLowerInvariant());
+        return words;
     }
 
     // Liste brute des compteurs repérés (nom du jeu, un par ligne), pour la traduction.
