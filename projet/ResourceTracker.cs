@@ -366,50 +366,6 @@ public static class ResourceTracker
         return result;
     }
 
-    // Rapport pour la traduction : compteur | libellé actuel | clés contenant son nom = texte du jeu.
-    public static string TranslationReport()
-    {
-        ResolveLabels();
-        List<string> keys = AllLocalizationKeys();
-        var builder = new StringBuilder();
-        for (int i = 0; i < Counters_.Count; i++)
-        {
-            Counter counter = Counters_[i];
-            builder.Append(counter.Name).Append(" | ").Append(counter.Label).Append(" | ");
-            int found = 0;
-            for (int k = 0; k < keys.Count && found < 8; k++)
-            {
-                if (keys[k].ToLowerInvariant().IndexOf(counter.Core, StringComparison.Ordinal) < 0)
-                    continue;
-                string text = AmmoCatalog.Translate(keys[k]);
-                builder.Append(found > 0 ? " ; " : string.Empty).Append(keys[k]).Append('=')
-                    .Append(text == null ? "?" : text.Replace('\n', ' '));
-                found++;
-            }
-            if (found == 0)
-            {
-                // Aucune clé ne porte le nom entier : candidats par mot du nom (au moins 5 lettres).
-                foreach (string word in Words(counter.Name))
-                {
-                    int wordFound = 0;
-                    for (int k = 0; k < keys.Count && wordFound < 6; k++)
-                    {
-                        if (keys[k].ToLowerInvariant().IndexOf(word, StringComparison.Ordinal) < 0)
-                            continue;
-                        string text = AmmoCatalog.Translate(keys[k]);
-                        if (text == null || text.Length > 60)
-                            continue;
-                        builder.Append(wordFound == 0 ? " [" + word + "] " : " ; ").Append(keys[k]).Append('=')
-                            .Append(text.Replace('\n', ' '));
-                        wordFound++;
-                    }
-                }
-            }
-            builder.Append('\n');
-        }
-        return builder.ToString();
-    }
-
     private static List<string> Words(string name, int minLength = 5)
     {
         string core = name;
@@ -442,15 +398,6 @@ public static class ResourceTracker
             if (!char.IsDigit(value[i]))
                 builder.Append(value[i]);
         }
-        return builder.ToString();
-    }
-
-    // Liste brute des compteurs repérés (nom du jeu, un par ligne), pour la traduction.
-    public static string RawNames()
-    {
-        var builder = new StringBuilder();
-        for (int i = 0; i < Counters_.Count; i++)
-            builder.Append(Counters_[i].Name).Append('\n');
         return builder.ToString();
     }
 

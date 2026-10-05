@@ -65,8 +65,6 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     public static bool PointerOverConsole { get { return _pointerOverConsole; } }
     private Vector2 _dragOffset;
     private int _activeTab;
-    private bool _resourcesShowAll;
-    private int _resourcesCopied = -1;
     private bool _collectEnabled;
     private bool _combatEnabled;
     private IReadOnlyList<Type> _cachedCollectibleCatalog;
@@ -352,21 +350,8 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
         BeginCard("Ressources", "Variation nette depuis la dernière remise à zéro (gains moins dépenses).");
         Row("Durée", FormatDuration(elapsed));
-        _resourcesShowAll = Switch(_resourcesShowAll, "Afficher tous les compteurs");
         if (GUILayout.Button("Remise à zéro", _sBtn, GUILayout.Height(26f)))
             ResourceTracker.Reset();
-        if (GUILayout.Button("Copier la liste brute des compteurs", _sBtn, GUILayout.Height(26f)))
-        {
-            GUIUtility.systemCopyBuffer = ResourceTracker.RawNames();
-            _resourcesCopied = ResourceTracker.Counters.Count;
-        }
-        if (GUILayout.Button("Copier la liste avec les traductions du jeu", _sBtn, GUILayout.Height(26f)))
-        {
-            GUIUtility.systemCopyBuffer = ResourceTracker.TranslationReport();
-            _resourcesCopied = ResourceTracker.Counters.Count;
-        }
-        if (_resourcesCopied >= 0)
-            Hint(_resourcesCopied + " noms de compteurs copiés dans le presse-papiers.");
         EndCard();
 
         BeginCard("Compteurs");
@@ -375,7 +360,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         for (int i = 0; i < counters.Count; i++)
         {
             ResourceTracker.Counter counter = counters[i];
-            if (!_resourcesShowAll && counter.Total == 0)
+            if (counter.Total == 0)
                 continue;
 
             shown++;
