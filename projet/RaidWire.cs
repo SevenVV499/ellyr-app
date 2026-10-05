@@ -73,6 +73,10 @@ public static class RaidWire
     // Décompte du jeu ≈ 10 s : au-delà, l'entrée est considérée comme avortée.
     private const float CountdownTimeoutSeconds = 25f;
 
+    // Plafond journalier de dégâts aux boss de Raid (compteur commun aux deux Raids) : au-delà,
+    // plus aucun gain, donc plus aucun intérêt à attaquer Ameterasu ou Behemoth.
+    public const int BossDamageCap = 200000000;
+
     private const int MaxEntryAttempts = 3;
     private const float CooldownSeconds = 120f;
     private const float FleeCooldownSeconds = 10f;
@@ -80,6 +84,7 @@ public static class RaidWire
 
     private static Phase _phase = Phase.Idle;
     private static MenuManager _menu;
+    private static bool _bossCapReached;
     private static RaidSpec _spec;
     private static float _phaseStartedAt;
     private static float _cooldownUntil;
@@ -105,7 +110,7 @@ public static class RaidWire
     // Cibles à traiter avant toutes les autres (boss), seulement si l'option est cochée.
     public static Func<PnjInfo, bool> ActivePriorityFilter
     {
-        get { return _phase == Phase.Active && _spec != null && Plugin.RaidBossPriority ? IsBoss : (Func<PnjInfo, bool>)null; }
+        get { return _phase == Phase.Active && _spec != null && Plugin.RaidBossPriority && !_bossCapReached ? IsBoss : (Func<PnjInfo, bool>)null; }
     }
 
     public static string Description
@@ -137,6 +142,7 @@ public static class RaidWire
         _spec = null;
         _cooldownUntil = 0f;
         _attempt = 0;
+        _bossCapReached = false;
     }
 
     /*
@@ -155,6 +161,8 @@ public static class RaidWire
         FicheJoueur joueur = snapshot == null ? null : snapshot.Joueur;
         if (joueur == null)
             return false;
+
+        _bossCapReached = joueur.RaidHasar >= BossDamageCap;
 
         float now = Time.time;
         int map = joueur.Harita;
@@ -460,7 +468,7 @@ public static class RaidWire
         if (key == _spec.MobName)
             return true;
         // Boss : ciblé seulement si l'option « boss en priorité » est cochée.
-        return Plugin.RaidBossPriority && key == _spec.BossName;
+        return Plugin.RaidBossPriority && !_bossCapReached && key == _spec.BossName;
     }
 
     private static bool IsBoss(PnjInfo pnj)

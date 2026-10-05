@@ -354,6 +354,14 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         Hint(Plugin.RaidBossPriority
             ? "Dès qu'un boss est visible, il est attaqué avant les mobs, même plus éloigné."
             : "Boss ignoré : seuls les mobs (Sunburst / Léviathan) sont attaqués.");
+        EtatJeuSnapshot raidSnapshot = GameState.ObtenirSnapshot();
+        if (raidSnapshot != null && raidSnapshot.Joueur != null)
+        {
+            int damage = raidSnapshot.Joueur.RaidHasar;
+            Row("Dégâts boss", damage.ToString("N0", CultureInfo.InvariantCulture).Replace(',', ' ')
+                + " / " + RaidWire.BossDamageCap.ToString("N0", CultureInfo.InvariantCulture).Replace(',', ' ')
+                + (damage >= RaidWire.BossDamageCap ? "  (plafond atteint : boss ignorés)" : string.Empty));
+        }
         Hint("Le type de Raid dépend du niveau (1-10 petite, 11-15 grande) ; un médaillon est requis.");
         Hint("Dans la Raid : navigation, combat et réparation uniquement, avec les cibles propres à la Raid.");
         EndCard();

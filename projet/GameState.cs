@@ -48,6 +48,7 @@ namespace EtatJoueurMod
         public int Niveau;
         public int TalismanAcemi;
         public int Talisman;
+        public int RaidHasar;
 
     }
 
@@ -1016,6 +1017,7 @@ namespace EtatJoueurMod
                 Niveau = source.Niveau,
                 TalismanAcemi = source.TalismanAcemi,
                 Talisman = source.Talisman,
+                RaidHasar = source.RaidHasar,
             };
 
         }
@@ -1339,6 +1341,7 @@ namespace EtatJoueurMod
             f.Niveau = j.seviye;
             f.TalismanAcemi = j.oyuncuAcemiTilsim;
             f.Talisman = j.oyuncuTilsim;
+            f.RaidHasar = j.oyuncuRaidHasar;
 
             f.CibleAttaqueNetId = f.EnModeAttaque
                                 ? ObtenirNetIdCibleAttaque()
