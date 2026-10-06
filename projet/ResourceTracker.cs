@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Reflection;
-using System.Text;
 using EtatJoueurMod;
 using UnityEngine;
 
@@ -15,6 +14,8 @@ using UnityEngine;
  * « SetOyuncu... / SetPlayer... » (le jeu met ces compteurs à jour par ces setters), plus
  * quelques noms explicites dont le setter a une orthographe différente.
  *
+ * Les compteurs sont affichés sous leur nom brut du jeu : aucune traduction, aucune table de langue.
+ *
  * Le total est la somme des variations observées entre deux lectures : un changement de
  * Player (reconnexion) ne fausse donc rien, la première lecture sert seulement de référence.
  * Les valeurs restent d'une session à l'autre ; seule la remise à zéro les efface.
@@ -24,54 +25,16 @@ public static class ResourceTracker
     public sealed class Counter
     {
         public string Name;
-        public string Label;
         public long Total;
         internal long Last;
         internal bool HasLast;
         internal MemberInfo Member;
-        internal string Core;
-        internal bool Translated;
     }
 
     private static readonly string[] ExplicitNames =
     {
         "oyuncuAltin", "playerPearl", "oyuncuTecrubePuan", "oyuncuTilsim", "oyuncuAcemiTilsim",
         "oyuncuSandikAnahtari", "oyuncuIcePearlSandikAnahtari"
-    };
-
-    // Liens compteur -> clé de texte du jeu, établis dans le code du jeu (écrans, setters, notifications).
-    // Le texte affiché est toujours celui de la table de langue du jeu (langue active).
-    private static readonly Dictionary<string, string> KeyLinks = new Dictionary<string, string>
-    {
-        { "oyuncuAltin", "PariltiAltin" },
-        { "oyuncuTecrubePuan", "PariltiTecrubePuani" },
-        { "oyuncuTilsim", "isiktilsimibaslik" },
-        { "oyuncuAcemiTilsim", "behemothtilsimibaslik" },
-        { "playerPearl", "InciBaslik" },
-        { "oyuncuKartalGozu", "KARTALgozu" },
-        { "oyuncuGuclendirilmisSarapnelGulle", "GucluSarapnelBaslik" },
-        { "oyuncuSandikAnahtari", "sandikanahataria" },
-        { "oyuncuIcePearlSandikAnahtari", "sandikanahataria2" },
-        { "oyuncuHavaiGulle", "winGulleHavaiBaslik" },
-        { "oyuncuKalkan", "winKalkanBaslik" },
-        { "oyuncuInciZipkin", "InciHarpoon" },
-        { "oyuncuMicoInci", "micoInciBaslik" },
-        { "oyuncuMicoAltin", "micoAltinBaslik" }
-    };
-
-    // Compteurs sans lien établi avec une clé de nom : on affiche leur nom brut, sans rapprochement.
-    private static readonly HashSet<string> NoLink = new HashSet<string>
-    {
-        "oyuncuAmulet25k", "oyuncuAmulet50k", "oyuncuOzgurlukGulle", "oyuncuCoin",
-        "oyuncuDumenciAltin", "oyuncuTopcuAltin", "oyuncuGuverteMojo", "oyuncuguverteNimet",
-        "oyuncuGuverte1", "oyuncuGuverte2", "oyuncuGuverte3", "oyuncuGuverte4", "oyuncuGuverte5",
-        "oyuncuGuverte6", "oyuncuGuverte7", "oyuncuGuverte8",
-        "oyuncuInciPaket1", "oyuncuInciPaket2", "oyuncuInciPaket3", "oyuncuInciPaket4",
-        "oyuncuInciPaket5", "oyuncuInciPaket6", "oyuncuInciPaket7", "oyuncuInciPaket8",
-        "oyuncuInciPaket9", "oyuncuInciPaket10", "oyuncuInciPaket11", "oyuncuInciPaket12",
-        "oyuncuOzgurlukPaket1", "oyuncuOzgurlukPaket2", "oyuncuOzgurlukPaket3",
-        "oyuncuTopPaket1", "oyuncuTopPaket2", "playerGoldShip1", "playerGoldShip3",
-        "oyuncuOzelGemi1", "oyuncuOzelGemi2", "oyuncuOzelGemi3", "oyuncuRaidHasar", "playerDamageNpc"
     };
 
     // Compteurs qui ne sont pas des ressources (identifiants, états, emplacements, progression).
@@ -97,11 +60,6 @@ public static class ResourceTracker
     private static bool _discovered;
     private static IntPtr _lastPlayer;
     private static float _startedAt = -1f;
-    private static int _labelAttempts;
-    internal static bool LanguageHookActive;
-    private static float _nextLanguageCheckAt;
-    private static string _languageSignature;
-    private static float _nextLabelAt;
 
     public static IReadOnlyList<Counter> Counters
     {
@@ -111,294 +69,6 @@ public static class ResourceTracker
     public static float ElapsedSeconds
     {
         get { return _startedAt < 0f ? 0f : Time.realtimeSinceStartup - _startedAt; }
-    }
-
-    // Appelé par le jeu juste après le chargement d'une langue (LanguagesManager.LoadLanguage) :
-    // les libellés déjà lus sont oubliés et relus dans la nouvelle langue.
-    internal static void OnLanguageLoaded()
-    {
-        for (int i = 0; i < Counters_.Count; i++)
-        {
-            Counters_[i].Translated = false;
-            Counters_[i].Label = Counters_[i].Name;
-        }
-        _labelAttempts = 0;
-        _nextLabelAt = Time.realtimeSinceStartup + 0.2f;
-    }
-
-    /*
-     * Repli si le chargement de langue ne peut pas être intercepté : détection du changement de langue : le choix est enregistré par le jeu sous la clé
-     * PlayerPrefs « language », et le texte d'une clé connue change avec la langue chargée. Dès que
-     * l'un des deux change, les libellés sont relus dans la table de la nouvelle langue.
-     */
-    private static void CheckLanguage()
-    {
-        _nextLanguageCheckAt = Time.realtimeSinceStartup + 2f;
-
-        // Le jeu signale lui-même le chargement d'une langue : inutile de la surveiller.
-        if (LanguageHookActive)
-            return;
-
-        string preference = string.Empty;
-        try
-        {
-            preference = PlayerPrefs.GetString("language", string.Empty);
-        }
-        catch
-        {
-        }
-
-        string signature = preference + "|" + (AmmoCatalog.Translate("PariltiAltin") ?? string.Empty);
-        if (signature == _languageSignature)
-            return;
-
-        bool first = _languageSignature == null;
-        _languageSignature = signature;
-        if (first)
-            return;
-
-        for (int i = 0; i < Counters_.Count; i++)
-        {
-            Counters_[i].Translated = false;
-            Counters_[i].Label = Counters_[i].Name;
-        }
-        _labelAttempts = 0;
-        _nextLabelAt = Time.realtimeSinceStartup + 1f;
-    }
-
-    // Libellés : la traduction du jeu (LanguagesManager) quand une clé porte exactement le nom
-    // du compteur (ou « <nom>baslik »). Les textes ne sont chargés qu'après la langue : on
-    // réessaie quelques fois, puis on garde le libellé de secours.
-    private const int MaxLabelAttempts = 6;
-
-    private static void ResolveLabels()
-    {
-        float now = Time.realtimeSinceStartup;
-        List<string> keys = AllLocalizationKeys();
-        if (keys.Count < 100)
-        {
-            _nextLabelAt = now + 10f;
-            return;
-        }
-
-        _labelAttempts++;
-        _nextLabelAt = now + 15f;
-
-        for (int i = 0; i < Counters_.Count; i++)
-        {
-            Counter counter = Counters_[i];
-            if (counter.Translated || NoLink.Contains(counter.Name))
-                continue;
-
-            string linkedKey;
-            if (KeyLinks.TryGetValue(counter.Name, out linkedKey))
-            {
-                for (int k = 0; k < keys.Count; k++)
-                {
-                    if (!string.Equals(keys[k], linkedKey, StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    string linkedText = AmmoCatalog.Translate(keys[k]);
-                    if (linkedText != null)
-                    {
-                        counter.Label = linkedText.Trim();
-                        counter.Translated = true;
-                    }
-                    break;
-                }
-                continue;
-            }
-
-            string bestText = null;
-            int bestScore = 0;
-            for (int k = 0; k < keys.Count; k++)
-            {
-                string lower = keys[k].ToLowerInvariant();
-                int score = 0;
-                if (lower == counter.Core + "baslik" || lower == counter.Core + "başlık")
-                    score = 3;
-                else if (counter.Core.Length >= 4 && lower.Contains(counter.Core) && lower.Contains("basl")
-                    && !HasNoisyToken(lower))
-                    score = 2;
-                else if (lower == counter.Core)
-                    score = 1;
-                if (score == 0 || score < bestScore)
-                    continue;
-
-                // Un libellé est court : les descriptions longues ne conviennent pas.
-                string text = AmmoCatalog.Translate(keys[k]);
-                if (text == null || text.Length > 40 || text.IndexOf('\n') >= 0)
-                    continue;
-
-                if (score > bestScore || bestText == null || text.Length < bestText.Length)
-                {
-                    bestScore = score;
-                    bestText = text;
-                }
-            }
-
-            if (bestText == null)
-                bestText = ResolveByDistinctiveWord(counter, keys);
-
-            if (bestText != null)
-            {
-                counter.Label = bestText.Trim();
-                counter.Translated = true;
-            }
-        }
-
-        Counters_.Sort((x, y) => string.Compare(x.Label, y.Label, StringComparison.CurrentCultureIgnoreCase));
-    }
-
-    private static readonly HashSet<string> GenericWords = new HashSet<string>
-    {
-        "gulle", "paket", "puan", "sandik", "tasinan", "teslim", "ship", "oyuncu", "player"
-    };
-
-    /*
-     * Second essai quand aucune clé ne porte le nom entier : les titres sont parfois écrits avec
-     * seulement le mot distinctif du nom (« cilalibaslik » pour CilaliTufek, « futboltopucbaslik »
-     * pour FutbolTopuGulle). On retient un titre seulement s'il est sans ambiguïté :
-     *  - le mot distinctif est rare dans la table (pas « guverte », présent partout) ;
-     *  - le niveau (altin / inci) du compteur figure aussi dans la clé ;
-     *  - un seul texte candidat, ou un seul qui contient le plus de mots du nom.
-     * Les noms terminés par un chiffre et les paquets (Paket) ne sont jamais traités ainsi.
-     */
-    private static string ResolveByDistinctiveWord(Counter counter, List<string> keys)
-    {
-        string lowerName = counter.Name.ToLowerInvariant();
-        if (lowerName.Contains("paket") || char.IsDigit(lowerName[lowerName.Length - 1]))
-            return null;
-
-        var mainWords = new List<string>();
-        var tiers = new List<string>();
-        foreach (string word in Words(counter.Name, 4))
-        {
-            if (GenericWords.Contains(word))
-                continue;
-            if (word == "altin" || word == "inci")
-                tiers.Add(word);
-            else
-                mainWords.Add(word);
-        }
-        if (mainWords.Count == 0)
-            return null;
-
-        string first = mainWords[0];
-        int rarity = 0;
-        var matches = new List<string[]>();
-        for (int k = 0; k < keys.Count; k++)
-        {
-            string lower = keys[k].ToLowerInvariant();
-            if (!lower.Contains(first))
-                continue;
-            rarity++;
-            if (!lower.Contains("basl") || HasNoisyToken(lower))
-                continue;
-
-            bool tiersOk = true;
-            for (int t = 0; t < tiers.Count; t++)
-                tiersOk &= lower.Contains(tiers[t]);
-            if (!tiersOk)
-                continue;
-
-            string text = AmmoCatalog.Translate(keys[k]);
-            if (text == null || text.Length > 40 || text.IndexOf('\n') >= 0)
-                continue;
-
-            int matched = 0;
-            for (int w = 0; w < mainWords.Count; w++)
-            {
-                if (lower.Contains(mainWords[w]))
-                    matched++;
-            }
-            // Plus de mots du nom = meilleur ; à égalité, la clé qui commence par le mot distinctif.
-            int score = matched * 2 + (lower.StartsWith(first, StringComparison.Ordinal) ? 1 : 0);
-            matches.Add(new[] { text.Trim(), score.ToString(CultureInfo.InvariantCulture) });
-        }
-
-        if (rarity > 8 || matches.Count == 0)
-            return null;
-        // Nom à plusieurs mots distinctifs : un titre qui n'en contient qu'un seul (comme « guclendirilmis »)
-        // peut appartenir à un autre objet ; on l'accepte seulement si ce mot est très rare.
-        bool bestHasTwoWords = false;
-        for (int i = 0; i < matches.Count; i++)
-            bestHasTwoWords |= int.Parse(matches[i][1], CultureInfo.InvariantCulture) >= 4;
-        if (mainWords.Count >= 2 && !bestHasTwoWords && rarity > 4)
-            return null;
-
-        int bestMatched = 0;
-        for (int i = 0; i < matches.Count; i++)
-            bestMatched = Math.Max(bestMatched, int.Parse(matches[i][1], CultureInfo.InvariantCulture));
-
-        string chosen = null;
-        for (int i = 0; i < matches.Count; i++)
-        {
-            if (int.Parse(matches[i][1], CultureInfo.InvariantCulture) != bestMatched)
-                continue;
-            if (chosen == null)
-                chosen = matches[i][0];
-            else if (!string.Equals(chosen, matches[i][0], StringComparison.OrdinalIgnoreCase))
-                return null;
-        }
-        return chosen;
-    }
-
-    // Clés de dégâts, quantités, prix, descriptions... : jamais un nom d'objet.
-    private static bool HasNoisyToken(string lowerKey)
-    {
-        string[] tokens =
-        {
-            "hasar", "adet", "fiyat", "aciklama", "ozellika", "bilgi", "vip", "acik", "odul", "kazan"
-        };
-        for (int i = 0; i < tokens.Length; i++)
-        {
-            if (lowerKey.Contains(tokens[i]))
-                return true;
-        }
-        return false;
-    }
-
-    private static List<string> AllLocalizationKeys()
-    {
-        var result = new List<string>();
-        foreach (KeyValuePair<string, List<string>> pair in AmmoCatalog.ReadLocalizationKeys())
-            result.AddRange(pair.Value);
-        return result;
-    }
-
-    private static List<string> Words(string name, int minLength = 5)
-    {
-        string core = name;
-        if (core.StartsWith("oyuncu", StringComparison.OrdinalIgnoreCase)
-            || core.StartsWith("player", StringComparison.OrdinalIgnoreCase))
-            core = core.Substring(6);
-
-        var words = new List<string>();
-        var current = new StringBuilder();
-        for (int i = 0; i < core.Length; i++)
-        {
-            if (i > 0 && char.IsUpper(core[i]) && !char.IsUpper(core[i - 1]) && current.Length > 0)
-            {
-                if (current.Length >= minLength)
-                    words.Add(StripDigits(current.ToString()).ToLowerInvariant());
-                current.Clear();
-            }
-            current.Append(core[i]);
-        }
-        if (current.Length >= minLength)
-            words.Add(StripDigits(current.ToString()).ToLowerInvariant());
-        return words;
-    }
-
-    private static string StripDigits(string value)
-    {
-        var builder = new StringBuilder(value.Length);
-        for (int i = 0; i < value.Length; i++)
-        {
-            if (!char.IsDigit(value[i]))
-                builder.Append(value[i]);
-        }
-        return builder.ToString();
     }
 
     // Remise à zéro demandée par l'utilisateur : les variations repartent de 0.
@@ -419,12 +89,6 @@ public static class ResourceTracker
             Discover();
         if (_startedAt < 0f)
             _startedAt = Time.realtimeSinceStartup;
-
-        if (Time.realtimeSinceStartup >= _nextLanguageCheckAt)
-            CheckLanguage();
-
-        if (_labelAttempts < MaxLabelAttempts && Time.realtimeSinceStartup >= _nextLabelAt)
-            ResolveLabels();
 
         // Nouveau Player (reconnexion, changement de scène) : les lectures qui suivent ne
         // servent que de nouvelle référence, sans ajouter de variation.
@@ -533,13 +197,11 @@ public static class ResourceTracker
                 Counters_.Add(new Counter
                 {
                     Name = memberName,
-                    Label = Label(memberName),
-                    Member = member,
-                    Core = Key(memberName)
+                    Member = member
                 });
             }
 
-            Counters_.Sort((a, b) => string.Compare(a.Label, b.Label, StringComparison.CurrentCultureIgnoreCase));
+            Counters_.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
         }
         catch (Exception e)
         {
@@ -562,11 +224,5 @@ public static class ResourceTracker
         if (lower.StartsWith("player", StringComparison.Ordinal))
             return lower.Substring(6);
         return lower;
-    }
-
-    // Sans texte du jeu, le libellé est le nom brut du compteur : aucune traduction maison.
-    private static string Label(string name)
-    {
-        return name;
     }
 }

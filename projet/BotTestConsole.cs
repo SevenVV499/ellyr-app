@@ -369,7 +369,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
                 : FormatSigned((long)(counter.Total / (elapsed / 3600f))) + " /h";
 
             GUILayout.BeginHorizontal();
-            GUILayout.Label(counter.Label, _sLabel, GUILayout.Width(260f));
+            GUILayout.Label(counter.Name, _sLabel, GUILayout.Width(260f));
             GUILayout.Label(FormatSigned(counter.Total), _sValue, GUILayout.Width(130f));
             GUILayout.Label(perHour, _sMuted);
             GUILayout.EndHorizontal();
