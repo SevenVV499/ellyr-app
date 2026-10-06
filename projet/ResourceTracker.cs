@@ -29,6 +29,51 @@ public static class ResourceTracker
         internal long Last;
         internal bool HasLast;
         internal MemberInfo Member;
+
+        // Lecteurs typés (sans conversion en objet) créés à la découverte quand c'est possible.
+        internal Func<Player, int> ReadInt;
+        internal Func<Player, long> ReadLong;
+
+        // Textes d'affichage recalculés seulement quand la valeur change (ou toutes les 5 s pour le rythme).
+        private long _totalTextFor = long.MinValue;
+        private string _totalText = string.Empty;
+        private long _perHourFor = long.MinValue;
+        private int _perHourBucket = -1;
+        private string _perHourText = string.Empty;
+
+        public string TotalText
+        {
+            get
+            {
+                if (_totalTextFor != Total)
+                {
+                    _totalTextFor = Total;
+                    _totalText = FormatSigned(Total);
+                }
+                return _totalText;
+            }
+        }
+
+        public string PerHourText(float elapsedSeconds)
+        {
+            if (elapsedSeconds < 60f)
+                return "-";
+
+            int bucket = (int)(elapsedSeconds / 5f);
+            if (_perHourFor != Total || _perHourBucket != bucket)
+            {
+                _perHourFor = Total;
+                _perHourBucket = bucket;
+                _perHourText = FormatSigned((long)(Total / (elapsedSeconds / 3600f))) + " /h";
+            }
+            return _perHourText;
+        }
+    }
+
+    public static string FormatSigned(long value)
+    {
+        string digits = Math.Abs(value).ToString("N0", CultureInfo.InvariantCulture).Replace(',', '.');
+        return value > 0 ? "+" + digits : value < 0 ? "-" + digits : digits;
     }
 
     private static readonly string[] ExplicitNames =
@@ -103,7 +148,7 @@ public static class ResourceTracker
         {
             Counter counter = Counters_[i];
             long value;
-            if (!TryRead(counter.Member, player, out value))
+            if (!TryRead(counter, player, out value))
                 continue;
 
             if (counter.HasLast)
@@ -113,11 +158,23 @@ public static class ResourceTracker
         }
     }
 
-    private static bool TryRead(MemberInfo member, Player player, out long value)
+    private static bool TryRead(Counter counter, Player player, out long value)
     {
         value = 0;
         try
         {
+            if (counter.ReadInt != null)
+            {
+                value = counter.ReadInt(player);
+                return true;
+            }
+            if (counter.ReadLong != null)
+            {
+                value = counter.ReadLong(player);
+                return true;
+            }
+
+            MemberInfo member = counter.Member;
             object raw;
             PropertyInfo property = member as PropertyInfo;
             if (property != null)
@@ -194,11 +251,13 @@ public static class ResourceTracker
                 if (!seen.Add(memberName) || IsExcluded(memberName))
                     continue;
 
-                Counters_.Add(new Counter
+                var counter = new Counter
                 {
                     Name = memberName,
                     Member = member
-                });
+                };
+                AttachTypedReader(counter, property, valueType);
+                Counters_.Add(counter);
             }
 
             Counters_.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
@@ -206,6 +265,31 @@ public static class ResourceTracker
         catch (Exception e)
         {
             Plugin.Logger.LogError("[ResourceTracker] Découverte des compteurs impossible : " + e);
+        }
+    }
+
+    // Lecteur typé via le getter de la propriété : évite la conversion en objet à chaque lecture.
+    // En cas d'échec, la lecture par réflexion reste utilisée.
+    private static void AttachTypedReader(Counter counter, PropertyInfo property, Type valueType)
+    {
+        if (property == null)
+            return;
+
+        try
+        {
+            MethodInfo getter = property.GetGetMethod();
+            if (getter == null || getter.IsStatic)
+                return;
+
+            if (valueType == typeof(int))
+                counter.ReadInt = (Func<Player, int>)Delegate.CreateDelegate(typeof(Func<Player, int>), getter);
+            else if (valueType == typeof(long))
+                counter.ReadLong = (Func<Player, long>)Delegate.CreateDelegate(typeof(Func<Player, long>), getter);
+        }
+        catch
+        {
+            counter.ReadInt = null;
+            counter.ReadLong = null;
         }
     }
 

@@ -364,14 +364,10 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
                 continue;
 
             shown++;
-            string perHour = elapsed < 60f
-                ? "-"
-                : FormatSigned((long)(counter.Total / (elapsed / 3600f))) + " /h";
-
             GUILayout.BeginHorizontal();
             GUILayout.Label(counter.Name, _sLabel, GUILayout.Width(260f));
-            GUILayout.Label(FormatSigned(counter.Total), _sValue, GUILayout.Width(130f));
-            GUILayout.Label(perHour, _sMuted);
+            GUILayout.Label(counter.TotalText, _sValue, GUILayout.Width(130f));
+            GUILayout.Label(counter.PerHourText(elapsed), _sMuted);
             GUILayout.EndHorizontal();
         }
 
@@ -380,12 +376,6 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         else if (shown == 0)
             Hint("Aucun compteur n'a bougé depuis la remise à zéro.");
         EndCard();
-    }
-
-    private static string FormatSigned(long value)
-    {
-        string digits = Math.Abs(value).ToString("N0", CultureInfo.InvariantCulture).Replace(',', '.');
-        return value > 0 ? "+" + digits : value < 0 ? "-" + digits : digits;
     }
 
     private static string FormatDuration(float seconds)

@@ -1668,7 +1668,7 @@ public static class CopperWire
         float reload;
         try
         {
-            reload = Convert.ToSingle((object)player.saldirihizi, CultureInfo.InvariantCulture);
+            reload = (float)player.saldirihizi;
         }
         catch
         {
@@ -2129,6 +2129,10 @@ public static class CopperWire
             && _cachedTargetPlayer.oyuncuId == globalId)
             return _cachedTargetPlayer;
 
+        // Joueur introuvable au dernier parcours : on ne reparcourt pas tous les objets réseau à chaque appel.
+        if (_playerScanMissId == globalId && Time.time < _nextPlayerScanAt)
+            return null;
+
         try
         {
             if (!NetworkClient.active || !NetworkClient.ready || NetworkClient.spawned == null)
@@ -2155,8 +2159,13 @@ public static class CopperWire
 
         _cachedPlayerGlobalId = 0;
         _cachedTargetPlayer = null;
+        _playerScanMissId = globalId;
+        _nextPlayerScanAt = Time.time + 0.5f;
         return null;
     }
+
+    private static int _playerScanMissId;
+    private static float _nextPlayerScanAt;
 
     
     

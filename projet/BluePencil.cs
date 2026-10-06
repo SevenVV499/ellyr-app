@@ -222,6 +222,7 @@ public sealed class BluePencil
         if (_brain.IsRespawning || snapshot.Joueur.Vie <= 0)
             return BehaviorActionType.None;
 
+        _candidateSnapshot = null;
         SynchroniserCarte(snapshot);
         PurgeSkippedCollectiblesNoLongerVisible(snapshot);
         PurgeExcludedMonsterTargets(snapshot);
@@ -559,10 +560,28 @@ public sealed class BluePencil
         _excludedMonsterTargetsToRemove.Clear();
     }
 
+    // Le meilleur candidat est calculé une seule fois par décision (Decide remet ce cache à zéro) :
+    // en Raid, le test de préemption et la sélection normale s'appuient sur le même résultat.
+    private EtatJeuSnapshot _candidateSnapshot;
+    private CombatTarget _candidate;
+
     private CombatTarget ObtenirCombatCandidat(EtatJeuSnapshot snapshot)
+    {
+        if (ReferenceEquals(_candidateSnapshot, snapshot))
+            return _candidate;
+
+        _candidate = CalculerCombatCandidat(snapshot);
+        _candidateSnapshot = snapshot;
+        return _candidate;
+    }
+
+    private CombatTarget CalculerCombatCandidat(EtatJeuSnapshot snapshot)
     {
         CombatTarget best = null;
 
+        // Le gagnant parmi les PNJ est retenu par référence ; l'objet CombatTarget n'est créé qu'une fois.
+        PnjInfo bestPnj = null;
+        TargetCategory bestCategory = default(TargetCategory);
         bool bestIsPriority = false;
         Func<PnjInfo, bool> allowPnj = EffectiveAllowPnj;
         if (allowPnj != null && snapshot.Pnjs != null)
@@ -594,32 +613,39 @@ public sealed class BluePencil
                     && _excludedMonsterTargets.Contains(pnj.Id))
                     continue;
 
-                CombatTarget candidate = new CombatTarget
-                {
-                    Kind = CombatTargetKind.NetworkId,
-                    NetId = pnj.Id,
-                    Category = pnj.Categorie,
-                    Type = pnj.Type,
-                    Name = pnj.Nom,
-                    X = pnj.X,
-                    Y = pnj.Y,
-                    Distance = pnj.Distance,
-                    Health = pnj.Vie,
-                    HasHealth = true,
-                    WeaponCategory = weaponCategory,
-                    AmmoId = ResolveAmmo(weaponCategory, pnj.Nom),
-                    Portee = pnj.Portee
-                };
                 // Boss prioritaires : le plus faible en PV d'abord (à PV égaux, le plus proche) ;
                 // les autres cibles : le plus proche.
-                if (best == null
+                if (bestPnj == null
                     || priority && !bestIsPriority
                     || priority == bestIsPriority
-                        && (priority ? IsWeaker(candidate, best) : IsCloser(candidate, best)))
+                        && (priority
+                            ? pnj.Vie < bestPnj.Vie || pnj.Vie == bestPnj.Vie && pnj.Distance < bestPnj.Distance
+                            : pnj.Distance < bestPnj.Distance))
                 {
-                    best = candidate;
+                    bestPnj = pnj;
+                    bestCategory = weaponCategory;
                     bestIsPriority = priority;
                 }
+            }
+
+            if (bestPnj != null)
+            {
+                best = new CombatTarget
+                {
+                    Kind = CombatTargetKind.NetworkId,
+                    NetId = bestPnj.Id,
+                    Category = bestPnj.Categorie,
+                    Type = bestPnj.Type,
+                    Name = bestPnj.Nom,
+                    X = bestPnj.X,
+                    Y = bestPnj.Y,
+                    Distance = bestPnj.Distance,
+                    Health = bestPnj.Vie,
+                    HasHealth = true,
+                    WeaponCategory = bestCategory,
+                    AmmoId = ResolveAmmo(bestCategory, bestPnj.Nom),
+                    Portee = bestPnj.Portee
+                };
             }
         }
 
@@ -952,12 +978,6 @@ public sealed class BluePencil
             return false;
 
         return true;
-    }
-
-    private static bool IsWeaker(CombatTarget candidate, CombatTarget current)
-    {
-        return candidate.Health < current.Health
-            || candidate.Health == current.Health && candidate.Distance < current.Distance;
     }
 
     private static bool IsCloser(CombatTarget candidate, CombatTarget current)

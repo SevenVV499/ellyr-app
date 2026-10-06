@@ -902,8 +902,8 @@ namespace EtatJoueurMod
                     ClonerCollectibles(tampon.Collectibles),
                     ClonerNavires(tampon.Navires),
                     ClonerPnjs(tampon.Pnjs),
-                    new List<RewardEvent>(_historiqueRecompenses),
-                    new List<CollectibleCallbackEvent>(_historiqueCallbacksCollectibles),
+                    _historiqueRecompenses.Count == 0 ? ListeRecompensesVide : new List<RewardEvent>(_historiqueRecompenses),
+                    _historiqueCallbacksCollectibles.Count == 0 ? ListeCallbacksVide : new List<CollectibleCallbackEvent>(_historiqueCallbacksCollectibles),
                     tampon.Timestamp);
                 Interlocked.Exchange(ref _snapshotPublie, snapshot);
                 Interlocked.Increment(ref _revisionInstantane);
@@ -914,6 +914,10 @@ namespace EtatJoueurMod
             }
 
         }
+
+        // Listes vides partagées : un instantané sans événement n'alloue pas de copie (jamais modifiées).
+        private static readonly List<RewardEvent> ListeRecompensesVide = new List<RewardEvent>();
+        private static readonly List<CollectibleCallbackEvent> ListeCallbacksVide = new List<CollectibleCallbackEvent>();
 
         public static EtatJeuSnapshot ObtenirSnapshot()
         {
