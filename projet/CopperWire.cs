@@ -210,8 +210,9 @@ public static class CopperWire
             return;
         }
 
-        if (_executedAction != null && _executedAction.Type == BehaviorActionType.Combat)
-            StopCombatForOwnedTarget();
+        // L'arrêt n'envoie aucune commande au jeu (pas d'arrêt d'attaque) : seul l'état du bot est effacé.
+        _ownsCombat = false;
+        _ownedCombatTarget = null;
         ReleaseMovementForUser(ObtenirPlayerLocal());
         ClearActionTracking();
         _executedAction = null;
