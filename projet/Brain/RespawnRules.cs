@@ -1,8 +1,11 @@
 using System;
 using EtatJoueurMod;
-using UnityEngine;
 
-public static class RespawnWire
+/*
+ * Règles de réapparition : détection du décès, envoi de la commande (par IRespawnActions, côté client),
+ * tentatives, délais, confirmation du retour à la vie. Aucun appel direct au jeu.
+ */
+public static class RespawnRules
 {
     private const float RespawnAttemptTimeoutSeconds = 15f;
     private const float RespawnCheckIntervalSeconds = 0.25f;
@@ -16,6 +19,9 @@ public static class RespawnWire
 
     // Nombre de snapshots distincts conformes exigés avant de sortir de Respawn.
     private const int ConfirmationSnapshotsRequired = 2;
+
+    // Horloge du jeu (secondes), fournie par le client à chaque Tick : les règles ne lisent pas le temps elles-mêmes.
+    private static float _now;
 
     private static BehaviorBrain _brain;
 
@@ -65,7 +71,7 @@ public static class RespawnWire
 
         if (_brain == null)
             BrainContext.Log.Error(
-                "[RespawnWire] Configurer appelé sans BehaviorBrain : " +
+                "[RespawnRules] Configurer appelé sans BehaviorBrain : " +
                 "le SystemState Respawn ne sera pas synchronisé.");
     }
 
@@ -75,7 +81,7 @@ public static class RespawnWire
         _confirmedSnapshotUtc = default(DateTime);
 
         /*
-         * Un reset garantit RespawnWire inactif ET Brain en Normal,
+         * Un reset garantit RespawnRules inactif ET Brain en Normal,
          * même si _active était déjà faux alors que le Brain est resté
          * accidentellement en Respawn.
          */
@@ -83,16 +89,18 @@ public static class RespawnWire
             _brain.ExitRespawn();
     }
 
-    public static void Tick(Player player, EtatJeuSnapshot snapshot)
+    public static void Tick(EtatJeuSnapshot snapshot, float now)
     {
-        if (player == null || snapshot == null || snapshot.Joueur == null)
+        if (snapshot == null || snapshot.Joueur == null)
             return;
+
+        _now = now;
 
         if (_brain == null && !_brainWarned)
         {
             _brainWarned = true;
             BrainContext.Log.Error(
-                "[RespawnWire] Aucun BehaviorBrain configuré : " +
+                "[RespawnRules] Aucun BehaviorBrain configuré : " +
                 "le respawn fonctionne sans synchroniser le SystemState.");
         }
 
@@ -114,19 +122,19 @@ public static class RespawnWire
         {
             /*
              * Filet de sécurité : le Brain ne doit jamais rester en Respawn
-             * alors que RespawnWire est inactif.
+             * alors que RespawnRules est inactif.
              */
             if (_brain != null && _brain.IsRespawning)
             {
                 BrainContext.Log.Warning(
-                    "[RespawnWire] Brain en Respawn alors que RespawnWire est inactif : sortie forcée.");
+                    "[RespawnRules] Brain en Respawn alors que RespawnRules est inactif : sortie forcée.");
                 _brain.ExitRespawn();
             }
 
             if (snapshot.Joueur.Vie > 0 || snapshot.Joueur.VieMax <= 0)
                 return;
 
-            StartRespawn(player);
+            StartRespawn();
             return;
         }
 
@@ -141,10 +149,10 @@ public static class RespawnWire
          * Vérification périodique pour éviter de travailler
          * inutilement à chaque appel du Hook.
          */
-        if (Time.time < _nextCheckAt)
+        if (_now < _nextCheckAt)
             return;
 
-        _nextCheckAt = Time.time + RespawnCheckIntervalSeconds;
+        _nextCheckAt = _now + RespawnCheckIntervalSeconds;
 
         /*
          * Confirmation testée AVANT toute logique de commande :
@@ -187,18 +195,18 @@ public static class RespawnWire
         {
             if (!snapshot.Joueur.BoutonReapparitionDisponible)
             {
-                if (Time.time - _startedAt >= RespawnAttemptTimeoutSeconds)
+                if (_now - _startedAt >= RespawnAttemptTimeoutSeconds)
                 {
                     BrainContext.Log.Warning(
-                        "[RespawnWire] Timeout avant disponibilité du bouton de respawn.");
+                        "[RespawnRules] Timeout avant disponibilité du bouton de respawn.");
 
-                    RestartRespawnAttempt(player);
+                    RestartRespawnAttempt();
                 }
 
                 return;
             }
 
-            SendRespawnCommand(player);
+            SendRespawnCommand();
             return;
         }
 
@@ -208,7 +216,7 @@ public static class RespawnWire
          * Si le retour n'est jamais confirmé, on considère
          * la tentative comme échouée après timeout.
          */
-        if (Time.time - _startedAt >= RespawnAttemptTimeoutSeconds)
+        if (_now - _startedAt >= RespawnAttemptTimeoutSeconds)
         {
             if (_attempts >= MaxRespawnCommandAttempts)
             {
@@ -217,10 +225,10 @@ public static class RespawnWire
             }
 
             BrainContext.Log.Warning(
-                "[RespawnWire] Timeout après YenidenDog(1) (tentative " +
+                "[RespawnRules] Timeout après YenidenDog(1) (tentative " +
                 _attempts + "/" + MaxRespawnCommandAttempts + "). Nouvelle tentative.");
 
-            RestartRespawnAttempt(player);
+            RestartRespawnAttempt();
         }
     }
 
@@ -232,11 +240,11 @@ public static class RespawnWire
         return (DateTime.UtcNow - snapshot.Timestamp).TotalSeconds > MaxSnapshotAgeSeconds;
     }
 
-    private static void StartRespawn(Player player)
+    private static void StartRespawn()
     {
         ClearRunState();
         _active = true;
-        _startedAt = Time.time;
+        _startedAt = _now;
 
         /*
          * Passage explicite du BehaviorBrain dans le SystemState Respawn.
@@ -247,57 +255,39 @@ public static class RespawnWire
         if (_brain != null)
             _brain.EnterRespawn();
 
-        StopNormalBehavior(player);
-
+        BrainContext.RespawnActions.StopCombat();
     }
 
-    private static void SendRespawnCommand(Player player)
+    private static void SendRespawnCommand()
     {
-        if (player == null)
-            return;
-
         if (_commandSent)
             return;
 
-        try
+        /*
+         * La tentative est comptée même si l'envoi échoue : en cas d'erreur, on ne renvoie pas
+         * la commande à chaque contrôle, c'est le timeout qui décidera d'une nouvelle tentative.
+         * Seul « jeu indisponible » ne consomme pas de tentative (GameManager absent).
+         */
+        RespawnSendResult result = BrainContext.RespawnActions.SendRespawn();
+        if (result == RespawnSendResult.Unavailable)
         {
-            GameManager manager = GameManager.gm;
-
-            if (manager == null)
+            if (!_gameManagerWarned)
             {
-                if (!_gameManagerWarned)
-                {
-                    _gameManagerWarned = true;
-                    BrainContext.Log.Warning(
-                        "[RespawnWire] GameManager.gm indisponible.");
-                }
-                return;
+                _gameManagerWarned = true;
+                BrainContext.Log.Warning(
+                    "[RespawnRules] GameManager.gm indisponible.");
             }
-
-            /*
-             * La tentative est comptée AVANT l'appel : si YenidenDog lève
-             * une exception, on ne renvoie pas la commande à chaque check,
-             * c'est le timeout qui décidera d'une éventuelle nouvelle tentative.
-             */
-            _attempts++;
-            _commandSent = true;
-            _startedAt = Time.time;
-
-            /*
-             * Chemin natif utilisé par le bouton :
-             *
-             * GameManager.YenidenDog(1)
-             * -> Player.SunucuOyuncuyuYenidenDogur(1)
-             */
-            manager.YenidenDog(1);
-
+            return;
         }
-        catch (Exception e)
-        {
+
+        _attempts++;
+        _commandSent = true;
+        _startedAt = _now;
+
+        if (result == RespawnSendResult.Failed)
             BrainContext.Log.Error(
-                "[RespawnWire] Erreur YenidenDog(1) (tentative " +
-                _attempts + "/" + MaxRespawnCommandAttempts + ") : " + e);
-        }
+                "[RespawnRules] Erreur YenidenDog(1) (tentative " +
+                _attempts + "/" + MaxRespawnCommandAttempts + ").");
     }
 
     private static bool IsRespawnComplete(EtatJeuSnapshot snapshot)
@@ -331,15 +321,7 @@ public static class RespawnWire
          * Les récompenses d'avant la mort ne doivent pas être attribuées
          * au nouveau cycle de comportement.
          */
-        try
-        {
-            GameState.PurgerRecompenses();
-        }
-        catch (Exception e)
-        {
-            BrainContext.Log.Error(
-                "[RespawnWire] Erreur purge des récompenses : " + e);
-        }
+        BrainContext.RespawnActions.PurgeRewards();
 
         /*
          * On quitte uniquement le SystemState Respawn.
@@ -358,12 +340,12 @@ public static class RespawnWire
         _abandoned = true;
 
         BrainContext.Log.Error(
-            "[RespawnWire] " + MaxRespawnCommandAttempts +
+            "[RespawnRules] " + MaxRespawnCommandAttempts +
             " tentatives de YenidenDog(1) sans confirmation : abandon des envois. " +
             "Le système reste en Respawn et observe l'état du joueur.");
     }
 
-    private static void RestartRespawnAttempt(Player player)
+    private static void RestartRespawnAttempt()
     {
         /*
          * Une nouvelle tentative ne réactive pas artificiellement
@@ -371,10 +353,10 @@ public static class RespawnWire
          */
         _commandSent = false;
         _gameManagerWarned = false;
-        _startedAt = Time.time;
+        _startedAt = _now;
         _nextCheckAt = 0f;
 
-        StopNormalBehavior(player);
+        BrainContext.RespawnActions.StopCombat();
     }
 
     private static void ClearRunState()
@@ -388,27 +370,5 @@ public static class RespawnWire
         _startedAt = 0f;
         _nextCheckAt = 0f;
         _lastConfirmSnapshotUtc = default(DateTime);
-    }
-
-    private static void StopNormalBehavior(Player player)
-    {
-        if (player == null)
-            return;
-
-        try
-        {
-            /*
-             * Stoppe uniquement le combat actuellement engagé.
-             */
-            GameManager manager = GameManager.gm;
-
-            if (manager != null && player.saldiridurumu)
-                manager.SaldiriDurdur();
-        }
-        catch (Exception e)
-        {
-            BrainContext.Log.Error(
-                "[RespawnWire] Erreur arrêt combat : " + e);
-        }
     }
 }

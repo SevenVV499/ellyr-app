@@ -34,6 +34,7 @@ namespace EtatJoueurMod
         private static IPlannerServices _services;
         private static IRaidActions _raidActions;
         private static ISurvivalActions _survivalActions;
+        private static IRespawnActions _respawnActions;
 
         // Réglages neutres tant que le client n'a rien renseigné : tout est désactivé.
         private sealed class DefaultSettings : IBrainSettings
@@ -91,9 +92,17 @@ namespace EtatJoueurMod
             public void Repair() { }
         }
 
+        private sealed class NullRespawnActions : IRespawnActions
+        {
+            public RespawnSendResult SendRespawn() { return RespawnSendResult.Unavailable; }
+            public void StopCombat() { }
+            public void PurgeRewards() { }
+        }
+
         private static readonly IPlannerServices NullServicesValue = new NullServices();
         private static readonly IRaidActions NullRaidActionsValue = new NullRaidActions();
         private static readonly ISurvivalActions NullSurvivalActionsValue = new NullSurvivalActions();
+        private static readonly IRespawnActions NullRespawnActionsValue = new NullRespawnActions();
         private static readonly IBrainSettings DefaultValues = new DefaultSettings();
         private static readonly IBrainLog NullValue = new NullLog();
 
@@ -119,6 +128,12 @@ namespace EtatJoueurMod
         {
             get { return _survivalActions ?? NullSurvivalActionsValue; }
             set { _survivalActions = value; }
+        }
+
+        public static IRespawnActions RespawnActions
+        {
+            get { return _respawnActions ?? NullRespawnActionsValue; }
+            set { _respawnActions = value; }
         }
 
         public static IBrainLog Log

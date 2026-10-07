@@ -127,7 +127,7 @@ public static class CopperWire
 
     static CopperWire()
     {
-        RespawnWire.Configurer(Brain);
+        RespawnRules.Configurer(Brain);
     }
 
     private static bool IssueCollectMove(Player player, uint targetNetId, NetworkIdentity identity)
@@ -217,7 +217,7 @@ public static class CopperWire
         ClearActionTracking();
         _executedAction = null;
         Planner.CancelCurrent();
-        RespawnWire.Reset();
+        RespawnRules.Reset();
         SurvivalRules.Reset();
         RaidRules.Reset();
     }
@@ -314,9 +314,9 @@ public static class CopperWire
 
         
         
-        bool etaitActif = RespawnWire.IsActive;
-        RespawnWire.Tick(player, snapshot);
-        if (etaitActif || RespawnWire.IsActive || Brain.IsRespawning)
+        bool etaitActif = RespawnRules.IsActive;
+        RespawnRules.Tick(snapshot, Time.time);
+        if (etaitActif || RespawnRules.IsActive || Brain.IsRespawning)
         {
             SurvivalRules.Reset();
             RaidRules.Reset();
@@ -331,7 +331,7 @@ public static class CopperWire
         
         
         
-        if (snapshot.Timestamp <= RespawnWire.DernierSnapshotConfirme)
+        if (snapshot.Timestamp <= RespawnRules.DernierSnapshotConfirme)
             return;
 
         
@@ -1805,7 +1805,7 @@ public static class CopperWire
             || action != _executedAction
             || action.Type != BehaviorActionType.Combat
             || action.InstanceId != _combatActionInstanceId
-            || RespawnWire.IsActive
+            || RespawnRules.IsActive
             || Brain.IsRespawning)
         {
             ClearNpcFollowTracking();

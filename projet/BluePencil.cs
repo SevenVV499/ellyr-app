@@ -216,7 +216,7 @@ public sealed class BluePencil
         if (snapshot == null || snapshot.Joueur == null)
             return BehaviorActionType.None;
 
-        // Le SystemState Respawn appartient à RespawnWire / BehaviorBrain :
+        // Le SystemState Respawn appartient à RespawnRules / BehaviorBrain :
         // BluePencil ne le modifie jamais et ne décide rien tant qu'il est actif.
         if (_brain.IsRespawning || snapshot.Joueur.Vie <= 0)
             return BehaviorActionType.None;

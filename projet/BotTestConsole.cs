@@ -254,7 +254,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     {
         if (!CopperWire.AutomationEnabled)
             return "ARRÊTÉ";
-        if (RespawnWire.IsActive)
+        if (RespawnRules.IsActive)
             return "RÉAPPARITION";
         if (SurvivalRules.IsFleeing)
             return "FUITE";
@@ -270,7 +270,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             return ColMuted;
         if (SurvivalRules.IsFleeing)
             return ColDanger;
-        if (RespawnWire.IsActive || SurvivalRules.IsRepairPaused)
+        if (RespawnRules.IsActive || SurvivalRules.IsRepairPaused)
             return ColWarn;
         return ColOk;
     }
@@ -654,8 +654,8 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         Row("Système", CopperWire.SystemState == BehaviorSystemState.Respawn ? "Réapparition" : "Normal");
         Row("Action", action == null ? "Aucune" : ActionLabel(action.Type) + " / " + ActionStateLabel(action.State));
         Row("Raid", RaidRules.Description);
-        Row("Réapparition", RespawnWire.IsActive
-            ? RespawnWire.IsAbandoned ? "active (tentatives abandonnées)" : "active"
+        Row("Réapparition", RespawnRules.IsActive
+            ? RespawnRules.IsAbandoned ? "active (tentatives abandonnées)" : "active"
             : "inactive");
 
         CombatTarget target = CopperWire.CurrentCombatTarget;
