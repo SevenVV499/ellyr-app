@@ -21,7 +21,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private static readonly string[] TabLabels =
         { "Paramètres", "Santé", "Cibles", "Collecte", "Raid", "Ressources", "Annonces" };
 
-    private const float HeaderHeight = 30f;
+    private const float HeaderHeight = 35f;
     private const float NavHeight = 30f;
     private const float TitleHeight = 22f;
     private const float BodyTop = HeaderHeight + NavHeight + TitleHeight + 4f;
@@ -341,39 +341,67 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         _stylesReady = false;
     }
 
+    // Bande de couleur en haut de la fenêtre : elle épouse l'arrondi des deux coins (rayon 8 px).
     private void DrawBand()
     {
         if (Event.current.type != EventType.Repaint)
             return;
 
-        const int segments = 56;
-        float x0 = _panel.x + 8f;
-        float width = (_panel.width - 16f) / segments;
+        const float radius = 8f;
+        const float thickness = 3f;
+        float left = _panel.x;
+        float width = _panel.width;
         Color previous = GUI.color;
-        for (int i = 0; i < segments; i++)
+
+        float x = 0f;
+        while (x < width - 0.01f)
         {
-            GUI.color = Color.Lerp(_bandA, _bandB, i / (float)(segments - 1));
-            GUI.DrawTexture(new Rect(x0 + i * width, _panel.y + 1f, width + 0.5f, 3f), Texture2D.whiteTexture);
+            float centre = x + 0.5f;
+            float fromEdge = Mathf.Min(centre, width - centre);
+            bool corner = fromEdge < radius;
+            float step = corner ? 1f : 5f;
+            if (x + step > width)
+                step = width - x;
+
+            float top = _panel.y + 1f;
+            float height = thickness;
+            if (corner)
+            {
+                top += CornerDrop(fromEdge, radius);
+                float next = CornerDrop(Mathf.Min(fromEdge + 1f, radius), radius);
+                height += Mathf.Max(0f, CornerDrop(fromEdge, radius) - next);
+            }
+
+            GUI.color = Color.Lerp(_bandA, _bandB, Mathf.Clamp01(centre / width));
+            GUI.DrawTexture(new Rect(left + x, top, step + 0.3f, height), Texture2D.whiteTexture);
+            x += step;
         }
         GUI.color = previous;
     }
 
+    // Décalage vertical du bord arrondi à la distance donnée du bord gauche ou droit.
+    private static float CornerDrop(float fromEdge, float radius)
+    {
+        float inside = radius - fromEdge;
+        return radius - Mathf.Sqrt(Mathf.Max(0f, radius * radius - inside * inside));
+    }
+
     private Rect GearRect()
     {
-        return new Rect(_panel.xMax - 46f - 30f, _panel.y + 5f, 24f, 20f);
+        return new Rect(_panel.xMax - 46f - 30f, _panel.y + 10f, 24f, 20f);
     }
 
     private void DrawHeader()
     {
         DrawBand();
         if (_texLogo != null && Event.current.type == EventType.Repaint)
-            GUI.DrawTexture(new Rect(_panel.x + 10f, _panel.y + 6f, 18f, 18f), _texLogo);
-        GUI.Label(new Rect(_panel.x + 34f, _panel.y + 5f, 50f, 20f), "ELLYR", _sTitle);
-        DrawDot(new Rect(_panel.x + 82f, _panel.y + 11f, 8f, 8f), StateColor());
+            GUI.DrawTexture(new Rect(_panel.x + 10f, _panel.y + 11f, 18f, 18f), _texLogo);
+        GUI.Label(new Rect(_panel.x + 34f, _panel.y + 10f, 50f, 20f), "ELLYR", _sTitle);
+        DrawDot(new Rect(_panel.x + 82f, _panel.y + 16f, 8f, 8f), StateColor());
 
         bool running = CopperWire.AutomationEnabled;
         bool repaint = Event.current.type == EventType.Repaint;
-        Rect play = new Rect(_panel.xMax - 46f, _panel.y + 5f, 34f, 20f);
+        Rect play = new Rect(_panel.xMax - 46f, _panel.y + 10f, 34f, 20f);
         bool clicked;
         if (running)
         {
