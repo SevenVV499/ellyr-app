@@ -7,19 +7,6 @@ using EtatJoueurMod;
  */
 public static class RespawnRules
 {
-    private const float RespawnAttemptTimeoutSeconds = 15f;
-    private const float RespawnCheckIntervalSeconds = 0.25f;
-
-    // Nombre maximal d'envois de YenidenDog(1) pour un même décès.
-    private const int MaxRespawnCommandAttempts = 3;
-
-    // Un snapshot plus vieux que ça n'est plus une information fiable
-    // (le snapshot est publié toutes les 0,5 s).
-    private const float MaxSnapshotAgeSeconds = 3f;
-
-    // Nombre de snapshots distincts conformes exigés avant de sortir de Respawn.
-    private const int ConfirmationSnapshotsRequired = 2;
-
     // Horloge du jeu (secondes), fournie par le client à chaque Tick : les règles ne lisent pas le temps elles-mêmes.
     private static float _now;
 
@@ -109,7 +96,7 @@ public static class RespawnRules
          * scène...) ne prouve rien : il ne peut ni déclencher un respawn,
          * ni le confirmer, ni provoquer l'envoi d'une commande.
          */
-        if (IsSnapshotStale(snapshot))
+        if (RulesData.IsSnapshotStale(snapshot))
             return;
 
         /*
@@ -152,7 +139,7 @@ public static class RespawnRules
         if (_now < _nextCheckAt)
             return;
 
-        _nextCheckAt = _now + RespawnCheckIntervalSeconds;
+        _nextCheckAt = _now + RulesData.Respawn.CheckIntervalSeconds;
 
         /*
          * Confirmation testée AVANT toute logique de commande :
@@ -170,7 +157,7 @@ public static class RespawnRules
                 _confirmCount++;
             }
 
-            if (_confirmCount >= ConfirmationSnapshotsRequired)
+            if (_confirmCount >= RulesData.Respawn.ConfirmationSnapshotsRequired)
                 CompleteRespawn(snapshot);
 
             return;
@@ -195,7 +182,7 @@ public static class RespawnRules
         {
             if (!snapshot.Joueur.BoutonReapparitionDisponible)
             {
-                if (_now - _startedAt >= RespawnAttemptTimeoutSeconds)
+                if (_now - _startedAt >= RulesData.Respawn.AttemptTimeoutSeconds)
                 {
                     BrainContext.Log.Warning(
                         "[RespawnRules] Timeout avant disponibilité du bouton de respawn.");
@@ -216,9 +203,9 @@ public static class RespawnRules
          * Si le retour n'est jamais confirmé, on considère
          * la tentative comme échouée après timeout.
          */
-        if (_now - _startedAt >= RespawnAttemptTimeoutSeconds)
+        if (_now - _startedAt >= RulesData.Respawn.AttemptTimeoutSeconds)
         {
-            if (_attempts >= MaxRespawnCommandAttempts)
+            if (_attempts >= RulesData.Respawn.MaxCommandAttempts)
             {
                 Abandon();
                 return;
@@ -226,18 +213,10 @@ public static class RespawnRules
 
             BrainContext.Log.Warning(
                 "[RespawnRules] Timeout après YenidenDog(1) (tentative " +
-                _attempts + "/" + MaxRespawnCommandAttempts + "). Nouvelle tentative.");
+                _attempts + "/" + RulesData.Respawn.MaxCommandAttempts + "). Nouvelle tentative.");
 
             RestartRespawnAttempt();
         }
-    }
-
-    private static bool IsSnapshotStale(EtatJeuSnapshot snapshot)
-    {
-        if (snapshot.Timestamp == default(DateTime))
-            return true;
-
-        return (DateTime.UtcNow - snapshot.Timestamp).TotalSeconds > MaxSnapshotAgeSeconds;
     }
 
     private static void StartRespawn()
@@ -287,7 +266,7 @@ public static class RespawnRules
         if (result == RespawnSendResult.Failed)
             BrainContext.Log.Error(
                 "[RespawnRules] Erreur YenidenDog(1) (tentative " +
-                _attempts + "/" + MaxRespawnCommandAttempts + ").");
+                _attempts + "/" + RulesData.Respawn.MaxCommandAttempts + ").");
     }
 
     private static bool IsRespawnComplete(EtatJeuSnapshot snapshot)
@@ -340,7 +319,7 @@ public static class RespawnRules
         _abandoned = true;
 
         BrainContext.Log.Error(
-            "[RespawnRules] " + MaxRespawnCommandAttempts +
+            "[RespawnRules] " + RulesData.Respawn.MaxCommandAttempts +
             " tentatives de YenidenDog(1) sans confirmation : abandon des envois. " +
             "Le système reste en Respawn et observe l'état du joueur.");
     }

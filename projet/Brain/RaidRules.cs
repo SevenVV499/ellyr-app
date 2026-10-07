@@ -47,39 +47,24 @@ public static class RaidRules
     private static readonly RaidSpec Petite = new RaidSpec
     {
         Kind = RaidKind.Petite,
-        Label = "Petite Raid",
-        MinLevel = 1,
-        MaxLevel = 10,
-        MapId = 41,
-        MobName = "sunburst",
-        BossName = "ameterasu"
+        Label = RulesData.Raid.PetiteLabel,
+        MinLevel = RulesData.Raid.PetiteMinLevel,
+        MaxLevel = RulesData.Raid.PetiteMaxLevel,
+        MapId = RulesData.Raid.PetiteMapId,
+        MobName = RulesData.Raid.PetiteMobName,
+        BossName = RulesData.Raid.PetiteBossName
     };
 
     private static readonly RaidSpec Grande = new RaidSpec
     {
         Kind = RaidKind.Grande,
-        Label = "Grande Raid",
-        MinLevel = 11,
-        MaxLevel = 15,
-        MapId = 42,
-        MobName = "leviathan",
-        BossName = "behemoth"
+        Label = RulesData.Raid.GrandeLabel,
+        MinLevel = RulesData.Raid.GrandeMinLevel,
+        MaxLevel = RulesData.Raid.GrandeMaxLevel,
+        MapId = RulesData.Raid.GrandeMapId,
+        MobName = RulesData.Raid.GrandeMobName,
+        BossName = RulesData.Raid.GrandeBossName
     };
-
-    // Immobilité avant l'envoi de l'ordre d'entrée (laisse retomber un déplacement en cours).
-    private const float SettleSeconds = 1f;
-
-    // Décompte du jeu ≈ 10 s : au-delà, l'entrée est considérée comme avortée.
-    private const float CountdownTimeoutSeconds = 25f;
-
-    // Plafond journalier de dégâts aux boss de Raid (compteur commun aux deux Raids) : au-delà,
-    // plus aucun gain, donc plus aucun intérêt à attaquer Ameterasu ou Behemoth.
-    public const int BossDamageCap = 200000000;
-
-    private const int MaxEntryAttempts = 3;
-    private const float CooldownSeconds = 120f;
-    private const float FleeCooldownSeconds = 10f;
-    private const float MaxSnapshotAgeSeconds = 3f;
 
     private static Phase _phase = Phase.Idle;
     // Horloge du jeu (secondes), fournie par le client à chaque Tick : les règles ne lisent pas le temps elles-mêmes.
@@ -162,7 +147,7 @@ public static class RaidRules
         if (joueur == null)
             return false;
 
-        _bossCapReached = joueur.RaidHasar >= BossDamageCap;
+        _bossCapReached = joueur.RaidHasar >= RulesData.Raid.BossDamageCap;
 
         _now = now;
         int map = joueur.Harita;
@@ -222,7 +207,7 @@ public static class RaidRules
             _phase = Phase.Idle;
         }
 
-        bool fresh = (DateTime.UtcNow - snapshot.Timestamp).TotalSeconds <= MaxSnapshotAgeSeconds;
+        bool fresh = !RulesData.IsSnapshotStale(snapshot);
         bool available = levelSpec != null
             && joueur.Vie > 0
             && fresh
@@ -246,7 +231,7 @@ public static class RaidRules
                     Abort(fleeing);
                     return false;
                 }
-                if (now - _phaseStartedAt < SettleSeconds)
+                if (now - _phaseStartedAt < RulesData.Raid.SettleSeconds)
                     return true;
                 if (!InvokeEntry(_spec))
                 {
@@ -263,11 +248,11 @@ public static class RaidRules
                     Abort(fleeing);
                     return false;
                 }
-                if (now - _phaseStartedAt < CountdownTimeoutSeconds)
+                if (now - _phaseStartedAt < RulesData.Raid.CountdownTimeoutSeconds)
                     return true;
-                if (_attempt >= MaxEntryAttempts)
+                if (_attempt >= RulesData.Raid.MaxEntryAttempts)
                 {
-                    GiveUp("aucun changement de carte après " + MaxEntryAttempts + " essais");
+                    GiveUp("aucun changement de carte après " + RulesData.Raid.MaxEntryAttempts + " essais");
                     return false;
                 }
                 _attempt++;
@@ -289,14 +274,14 @@ public static class RaidRules
     private static void Abort(bool fleeing)
     {
         _phase = Phase.CoolingDown;
-        _cooldownUntil = _now + (fleeing ? FleeCooldownSeconds : 2f);
+        _cooldownUntil = _now + (fleeing ? RulesData.Raid.FleeCooldownSeconds : 2f);
     }
 
     private static void GiveUp(string reason)
     {
         _phase = Phase.CoolingDown;
-        _cooldownUntil = _now + CooldownSeconds;
-        BrainContext.Log.Warning("[RaidRules] Entrée abandonnée : " + reason + ". Pause " + (int)CooldownSeconds + " s.");
+        _cooldownUntil = _now + RulesData.Raid.CooldownSeconds;
+        BrainContext.Log.Warning("[RaidRules] Entrée abandonnée : " + reason + ". Pause " + (int)RulesData.Raid.CooldownSeconds + " s.");
     }
 
     // L'appel au jeu (clic du bouton d'entrée) est fait par le client : IRaidActions.

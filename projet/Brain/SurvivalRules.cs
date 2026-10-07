@@ -22,17 +22,6 @@ using EtatJoueurMod;
  */
 public static class SurvivalRules
 {
-    // Délai minimal entre deux Commands Repair() : une réparation interrompue
-    // (tir reçu...) est retentée tant que la condition de PV reste vraie.
-    private const float RepairRetrySeconds = 2f;
-
-    // Un snapshot plus vieux que ça ne prouve rien sur les PV actuels.
-    private const float MaxSnapshotAgeSeconds = 3f;
-
-    // Garde-fou : une fuite qui ne se termine pas (réparation désactivée,
-    // PV qui ne remontent pas) est abandonnée après ce délai.
-    private const float FleeMaxSeconds = 180f;
-
     private static bool _fleeing;
     private static bool _fleeSuppressed;
     private static bool _repairPaused;
@@ -69,7 +58,7 @@ public static class SurvivalRules
         bool wasFleeing = _fleeing;
         FicheJoueur joueur = snapshot == null ? null : snapshot.Joueur;
         if (joueur == null
-            || IsSnapshotStale(snapshot)
+            || RulesData.IsSnapshotStale(snapshot)
             || joueur.Vie <= 0
             || joueur.VieMax <= 0)
         {
@@ -122,7 +111,7 @@ public static class SurvivalRules
             return;
         }
 
-        if (_now - _fleeStartedAt >= FleeMaxSeconds)
+        if (_now - _fleeStartedAt >= RulesData.Survival.FleeMaxSeconds)
         {
             // Pas de nouvelle fuite tant que les PV ne sont pas repassés au-dessus du seuil.
             _fleeSuppressed = true;
@@ -162,7 +151,7 @@ public static class SurvivalRules
         {
             _repairPaused = false;
         }
-        else if (_now - _pauseStartedAt >= FleeMaxSeconds)
+        else if (_now - _pauseStartedAt >= RulesData.Survival.FleeMaxSeconds)
         {
             _pauseSuppressed = true;
             _repairPaused = false;
@@ -190,15 +179,7 @@ public static class SurvivalRules
         if (percent > BrainContext.Settings.RepairPercent && !_fleeing && !_repairPaused)
             return;
 
-        _nextRepairAt = _now + RepairRetrySeconds;
+        _nextRepairAt = _now + RulesData.Survival.RepairRetrySeconds;
         BrainContext.SurvivalActions.Repair();
-    }
-
-    private static bool IsSnapshotStale(EtatJeuSnapshot snapshot)
-    {
-        if (snapshot.Timestamp == default(DateTime))
-            return true;
-
-        return (DateTime.UtcNow - snapshot.Timestamp).TotalSeconds > MaxSnapshotAgeSeconds;
     }
 }

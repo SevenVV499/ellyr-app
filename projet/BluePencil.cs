@@ -121,9 +121,6 @@ public sealed class BluePencil
         NormalChest
     }
 
-    private const int NavigationPriority = 10;
-    private const int EngagedActionPriority = 200;
-
     // LongRange contre un NPC : le bot vise ce décalage sous sa propre portée,
     // car il se déplace à la case près ; en visant pile sa portée, il arriverait
     // souvent juste au-delà. Il ne reste hors de la portée du NPC que si ce
@@ -695,7 +692,7 @@ public sealed class BluePencil
             rewardSequence);
         bool started = _brain.TryPreempt(
             BehaviorActionType.Collect,
-            EngagedActionPriority,
+            RulesData.EngagedActionPriority,
             false,
             context);
         BehaviorAction action = _brain.CurrentAction;
@@ -713,7 +710,7 @@ public sealed class BluePencil
 
         bool started = _brain.TryPreempt(
             BehaviorActionType.Combat,
-            EngagedActionPriority,
+            RulesData.EngagedActionPriority,
             false,
             new CombatActionContext { Target = target });
 
@@ -811,7 +808,7 @@ public sealed class BluePencil
         if (!_brain.HasCurrentAction)
             _brain.StartAction(
                 BehaviorActionType.Navigation,
-                NavigationPriority,
+                RulesData.NavigationPriority,
                 true);
     }
 
