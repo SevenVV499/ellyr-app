@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 /*
  * Contrat entre le cerveau (décisions) et le client : les réglages que le cerveau lit et le journal
@@ -31,6 +32,7 @@ namespace EtatJoueurMod
         private static IBrainSettings _settings;
         private static IBrainLog _log;
         private static IPlannerServices _services;
+        private static IRaidActions _raidActions;
 
         // Réglages neutres tant que le client n'a rien renseigné : tout est désactivé.
         private sealed class DefaultSettings : IBrainSettings
@@ -73,9 +75,18 @@ namespace EtatJoueurMod
                 category = default(TargetCategory);
                 return false;
             }
+
+            public IReadOnlyList<string> MonsterNames { get { return new string[0]; } }
+            public IReadOnlyList<string> NpcNames { get { return new string[0]; } }
+        }
+
+        private sealed class NullRaidActions : IRaidActions
+        {
+            public bool TryEnter(bool petiteRaid) { return false; }
         }
 
         private static readonly IPlannerServices NullServicesValue = new NullServices();
+        private static readonly IRaidActions NullRaidActionsValue = new NullRaidActions();
         private static readonly IBrainSettings DefaultValues = new DefaultSettings();
         private static readonly IBrainLog NullValue = new NullLog();
 
@@ -89,6 +100,12 @@ namespace EtatJoueurMod
         {
             get { return _services ?? NullServicesValue; }
             set { _services = value; }
+        }
+
+        public static IRaidActions RaidActions
+        {
+            get { return _raidActions ?? NullRaidActionsValue; }
+            set { _raidActions = value; }
         }
 
         public static IBrainLog Log

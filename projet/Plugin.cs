@@ -65,6 +65,7 @@ namespace EtatJoueurMod
                 BrainContext.Settings = new PluginBrainSettings();
                 BrainContext.Log = new PluginBrainLog();
                 BrainContext.Services = new ClientPlannerServices();
+                BrainContext.RaidActions = new ClientRaidActions();
                 _targetCatalogDisconnectHandler =
                     DelegateSupport.ConvertDelegate<Il2CppSystem.Action>(new Action(ResetSessionCatalogs));
                 NetworkClient.OnDisconnectedEvent -= _targetCatalogDisconnectHandler;
@@ -335,5 +336,8 @@ namespace EtatJoueurMod
         {
             return TargetCatalog.TryGetCategory(name, out category);
         }
+
+        public IReadOnlyList<string> MonsterNames { get { return TargetCatalog.Monsters; } }
+        public IReadOnlyList<string> NpcNames { get { return TargetCatalog.Npcs; } }
     }
 }

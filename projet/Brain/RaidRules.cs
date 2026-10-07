@@ -3,20 +3,19 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using EtatJoueurMod;
-using UnityEngine;
 
 /*
  * Module Carte Raid.
  *
  * Responsabilités : choisir le type de Raid d'après le niveau, vérifier le médaillon,
- * lancer l'entrée (reproduit le clic du joueur : MenuManager.raidmapgir / raidmapAcemigir),
+ * lancer l'entrée (par IRaidActions, côté client : reproduit le clic du bouton du jeu),
  * confirmer par la carte, maintenir l'état « Raid active » et fournir la liste interne
  * des cibles. Navigation, Combat, Réparation et Réapparition restent aux modules existants.
  *
  * Le décompte du jeu (~10 s) est annulé par tout déplacement ou attaque : pendant l'entrée
- * le navire reste donc immobile (CopperWire appelle HaltAllActivity tant que Tick renvoie true).
+ * le navire reste donc immobile (le client arrête l'activité tant que Tick renvoie true).
  */
-public static class RaidWire
+public static class RaidRules
 {
     private enum Phase
     {
@@ -83,7 +82,8 @@ public static class RaidWire
     private const float MaxSnapshotAgeSeconds = 3f;
 
     private static Phase _phase = Phase.Idle;
-    private static MenuManager _menu;
+    // Horloge du jeu (secondes), fournie par le client à chaque Tick : les règles ne lisent pas le temps elles-mêmes.
+    private static float _now;
     private static bool _bossCapReached;
     private static RaidSpec _spec;
     private static float _phaseStartedAt;
@@ -149,7 +149,7 @@ public static class RaidWire
      * Renvoie true tant que le navire doit rester immobile (entrée en cours ou module bloqué).
      * actionEngaged : une action Combat/Collecte est engagée ; l'entrée attend sa fin.
      */
-    public static bool Tick(Player player, EtatJeuSnapshot snapshot, bool fleeing, bool actionEngaged)
+    public static bool Tick(EtatJeuSnapshot snapshot, bool fleeing, bool actionEngaged, float now)
     {
         if (!BrainContext.Settings.RaidEnabled)
         {
@@ -164,7 +164,7 @@ public static class RaidWire
 
         _bossCapReached = joueur.RaidHasar >= BossDamageCap;
 
-        float now = Time.time;
+        _now = now;
         int map = joueur.Harita;
         RaidSpec mapSpec = SpecForMap(map);
         RaidSpec levelSpec = SpecForLevel(joueur.Niveau);
@@ -191,7 +191,7 @@ public static class RaidWire
                 // Le bot reste à l'arrêt (aucune action) jusqu'à ce que la carte change.
                 _blockedMap = map;
                 _phase = Phase.Blocked;
-                BrainContext.Log.Error("[RaidWire] Carte inattendue après l'entrée : attendu "
+                BrainContext.Log.Error("[RaidRules] Carte inattendue après l'entrée : attendu "
                     + (_spec == null ? 0 : _spec.MapId) + ", obtenu " + map + ". Bot à l'arrêt.");
                 return true;
             }
@@ -273,7 +273,7 @@ public static class RaidWire
                 _attempt++;
                 _phase = Phase.Settling;
                 _phaseStartedAt = now;
-                BrainContext.Log.Warning("[RaidWire] Pas de changement de carte : nouvel essai " + _attempt + ".");
+                BrainContext.Log.Warning("[RaidRules] Pas de changement de carte : nouvel essai " + _attempt + ".");
                 return true;
         }
 
@@ -289,49 +289,21 @@ public static class RaidWire
     private static void Abort(bool fleeing)
     {
         _phase = Phase.CoolingDown;
-        _cooldownUntil = Time.time + (fleeing ? FleeCooldownSeconds : 2f);
+        _cooldownUntil = _now + (fleeing ? FleeCooldownSeconds : 2f);
     }
 
     private static void GiveUp(string reason)
     {
         _phase = Phase.CoolingDown;
-        _cooldownUntil = Time.time + CooldownSeconds;
-        BrainContext.Log.Warning("[RaidWire] Entrée abandonnée : " + reason + ". Pause " + (int)CooldownSeconds + " s.");
+        _cooldownUntil = _now + CooldownSeconds;
+        BrainContext.Log.Warning("[RaidRules] Entrée abandonnée : " + reason + ". Pause " + (int)CooldownSeconds + " s.");
     }
 
-    // Reproduit l'appel du bouton du jeu : les contrôles natifs (cooldown, stock, carte) restent actifs.
+    // L'appel au jeu (clic du bouton d'entrée) est fait par le client : IRaidActions.
+    // Petite Raid (talisman du soleil) = raidmapgir ; Grande Raid (talisman de Behemoth) = raidmapAcemigir.
     private static bool InvokeEntry(RaidSpec spec)
     {
-        try
-        {
-            // Accès statique du jeu (assigné dans MenuManager.Start) ; repli sur une recherche
-            // dans la scène, mémorisée, tant qu'il est nul.
-            MenuManager menu = MenuManager.menuManager;
-            if (menu == null)
-            {
-                if (_menu == null)
-                    _menu = UnityEngine.Object.FindObjectOfType<MenuManager>();
-                menu = _menu;
-            }
-            if (menu == null)
-            {
-                BrainContext.Log.Error("[RaidWire] MenuManager introuvable.");
-                return false;
-            }
-
-            // Petite Raid (talisman du soleil) = raidmapgir / oyuncuTilsim ;
-            // Grande Raid (talisman de Behemoth) = raidmapAcemigir / oyuncuAcemiTilsim.
-            if (spec.Kind == RaidKind.Petite)
-                menu.raidmapgir();
-            else
-                menu.raidmapAcemigir();
-            return true;
-        }
-        catch (Exception e)
-        {
-            BrainContext.Log.Error("[RaidWire] Erreur d'entrée : " + e);
-            return false;
-        }
+        return BrainContext.RaidActions.TryEnter(spec.Kind == RaidKind.Petite);
     }
 
     /*
@@ -394,8 +366,8 @@ public static class RaidWire
 
     private static Dictionary<string, string> CatalogKeys()
     {
-        IReadOnlyList<string> monsters = TargetCatalog.Monsters;
-        IReadOnlyList<string> npcs = TargetCatalog.Npcs;
+        IReadOnlyList<string> monsters = BrainContext.Services.MonsterNames;
+        IReadOnlyList<string> npcs = BrainContext.Services.NpcNames;
         lock (CatalogGate)
         {
             if (ReferenceEquals(_cachedMonsters, monsters) && ReferenceEquals(_cachedNpcs, npcs))
@@ -443,8 +415,8 @@ public static class RaidWire
         if (key == null)
             return TargetCategory.Npc;
 
-        bool monster = CatalogHasKey(TargetCatalog.Monsters, key);
-        bool npc = CatalogHasKey(TargetCatalog.Npcs, key);
+        bool monster = CatalogHasKey(BrainContext.Services.MonsterNames, key);
+        bool npc = CatalogHasKey(BrainContext.Services.NpcNames, key);
         return monster && !npc ? TargetCategory.Monster : TargetCategory.Npc;
     }
 

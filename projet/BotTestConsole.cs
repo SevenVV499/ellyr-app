@@ -403,8 +403,8 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         {
             int damage = raidSnapshot.Joueur.RaidHasar;
             Row("Dégâts boss", damage.ToString("N0", CultureInfo.InvariantCulture).Replace(',', '.')
-                + " / " + RaidWire.BossDamageCap.ToString("N0", CultureInfo.InvariantCulture).Replace(',', '.')
-                + (damage >= RaidWire.BossDamageCap ? "  (plafond atteint : boss ignorés)" : string.Empty));
+                + " / " + RaidRules.BossDamageCap.ToString("N0", CultureInfo.InvariantCulture).Replace(',', '.')
+                + (damage >= RaidRules.BossDamageCap ? "  (plafond atteint : boss ignorés)" : string.Empty));
         }
         Hint("Le type de Raid dépend du niveau (1-10 petite, 11-15 grande) ; un médaillon est requis.");
         Hint("Dans la Raid : navigation, combat et réparation uniquement, avec les cibles propres à la Raid.");
@@ -425,7 +425,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     [HideFromIl2Cpp]
     private void DrawRaidTargetRow(string name, string role)
     {
-        TargetCategory category = RaidWire.WeaponCategoryFor(name);
+        TargetCategory category = RaidRules.WeaponCategoryFor(name);
         string targetKey = GetTargetKey(category, name);
         bool dropdownOpen = string.Equals(
             _editingAmmoTarget, targetKey, StringComparison.OrdinalIgnoreCase);
@@ -653,7 +653,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         BeginCard("Bot");
         Row("Système", CopperWire.SystemState == BehaviorSystemState.Respawn ? "Réapparition" : "Normal");
         Row("Action", action == null ? "Aucune" : ActionLabel(action.Type) + " / " + ActionStateLabel(action.State));
-        Row("Raid", RaidWire.Description);
+        Row("Raid", RaidRules.Description);
         Row("Réapparition", RespawnWire.IsActive
             ? RespawnWire.IsAbandoned ? "active (tentatives abandonnées)" : "active"
             : "inactive");
@@ -1286,7 +1286,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private bool IsPnjAllowed(string name)
     {
         // Cibles de Raid : réservées au module Raid, jamais ciblées via l'onglet Cibles.
-        if (RaidWire.TargetKey(name) != null)
+        if (RaidRules.TargetKey(name) != null)
             return false;
 
         TargetCategory category;
@@ -1350,7 +1350,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private static string GetTargetKey(TargetCategory category, string name)
     {
         // Cibles de Raid : clé indépendante de l'orthographe et de la catégorie du jeu.
-        string raidKey = RaidWire.TargetKey(name);
+        string raidKey = RaidRules.TargetKey(name);
         if (raidKey != null)
             return "raid:" + raidKey;
 

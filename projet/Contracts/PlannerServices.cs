@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 /*
  * Contrat : les trois services du jeu dont le planificateur a besoin. Le planificateur ne connaît ni
@@ -28,5 +29,9 @@ namespace EtatJoueurMod
 
         // Catégorie d'arme (canon ou harpon) d'une cible d'après le catalogue du jeu.
         bool TryGetWeaponCategory(string name, out TargetCategory category);
+
+        // Noms du catalogue de cibles (monstres, NPC), dans la langue du jeu.
+        IReadOnlyList<string> MonsterNames { get; }
+        IReadOnlyList<string> NpcNames { get; }
     }
 }

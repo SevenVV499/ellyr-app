@@ -219,7 +219,7 @@ public static class CopperWire
         Planner.CancelCurrent();
         RespawnWire.Reset();
         SurvivalWire.Reset();
-        RaidWire.Reset();
+        RaidRules.Reset();
     }
 
     public static void SetLongRange(bool enabled)
@@ -319,7 +319,7 @@ public static class CopperWire
         if (etaitActif || RespawnWire.IsActive || Brain.IsRespawning)
         {
             SurvivalWire.Reset();
-            RaidWire.Reset();
+            RaidRules.Reset();
             if (_executedAction != null)
             {
                 CleanupAction(_executedAction, player);
@@ -365,14 +365,14 @@ public static class CopperWire
         bool actionEngaged = currentAction != null
             && !currentAction.IsFinished
             && currentAction.Type != BehaviorActionType.Navigation;
-        if (RaidWire.Tick(player, snapshot, fleeing, actionEngaged))
+        if (RaidRules.Tick(snapshot, fleeing, actionEngaged, Time.time))
         {
             Planner.SetRaidContext(null);
             _wasHalted = true;
             HaltAllActivity(player, snapshot);
             return;
         }
-        Planner.SetRaidContext(RaidWire.ActiveTargetFilter, RaidWire.ActivePriorityFilter);
+        Planner.SetRaidContext(RaidRules.ActiveTargetFilter, RaidRules.ActivePriorityFilter);
 
         if (_wasHalted)
         {

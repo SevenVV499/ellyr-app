@@ -150,7 +150,7 @@ public sealed class BluePencil
     private readonly List<uint> _excludedMonsterTargetsToRemove = new List<uint>();
     private Func<PnjInfo, bool> _allowPnj;
     private Func<NavireInfo, bool> _allowShip;
-    // Contexte Raid : liste de cibles imposée par RaidWire (remplace celle de l'utilisateur,
+    // Contexte Raid : liste de cibles imposée par RaidRules (remplace celle de l'utilisateur,
     // sans Collecte ni cibles joueurs).
     private Func<PnjInfo, bool> _raidAllowPnj;
     // Cibles prioritaires en Raid (boss) : choisies avant toute autre, même plus éloignées.
@@ -951,13 +951,13 @@ public sealed class BluePencil
     /*
      * Catégorie d'arme d'une cible. Le catalogue reste la référence, sauf pour les cibles de la
      * liste interne d'une Raid (boss de type navire d'événement absents du catalogue) :
-     * RaidWire.WeaponCategoryFor, la même règle que la console pour le choix des munitions.
+     * RaidRules.WeaponCategoryFor, la même règle que la console pour le choix des munitions.
      */
     private bool ResolveWeaponCategory(PnjInfo pnj, out TargetCategory category)
     {
         if (_raidAllowPnj != null && _raidAllowPnj(pnj))
         {
-            category = RaidWire.WeaponCategoryFor(pnj.Nom);
+            category = RaidRules.WeaponCategoryFor(pnj.Nom);
             return true;
         }
 
