@@ -590,7 +590,8 @@ public sealed class BluePencil
             {
                 PnjInfo pnj = snapshot.Pnjs[i];
                 if (pnj == null || pnj.Id == 0 || pnj.Vie <= 0
-                    || IsInvalidDistance(pnj.Distance) || !allowPnj(pnj))
+                    || IsInvalidDistance(pnj.Distance) || !allowPnj(pnj)
+                    || !IsOnPlayerMap(pnj, snapshot))
                     continue;
 
                 // Option « cibles à PV max » : une cible déjà entamée n'est pas engagée.
@@ -815,6 +816,20 @@ public sealed class BluePencil
                 true);
     }
 
+    /*
+     * Le serveur envoie certains PNJ (navires d'événement) même quand ils sont sur une autre carte.
+     * Une cible n'est valable que sur la carte du joueur. Carte du PNJ inconnue (<= 0) : on ne
+     * l'écarte pas. En Raid, la liste de cibles est celle de la Raid : pas de filtre de carte.
+     */
+    private bool IsOnPlayerMap(PnjInfo pnj, EtatJeuSnapshot snapshot)
+    {
+        if (_raidAllowPnj != null || snapshot.Joueur == null)
+            return true;
+
+        int playerMap = snapshot.Joueur.Harita;
+        return pnj.Harita <= 0 || playerMap <= 0 || pnj.Harita == playerMap;
+    }
+
     private CombatTarget TrouverCibleCombat(EtatJeuSnapshot snapshot, CombatTarget engaged)
     {
         if (engaged.Kind == CombatTargetKind.NetworkId)
@@ -825,7 +840,8 @@ public sealed class BluePencil
             for (int i = 0; i < snapshot.Pnjs.Count; i++)
             {
                 PnjInfo pnj = snapshot.Pnjs[i];
-                if (pnj == null || pnj.Id != engaged.NetId || !EffectiveAllowPnj(pnj))
+                if (pnj == null || pnj.Id != engaged.NetId || !EffectiveAllowPnj(pnj)
+                    || !IsOnPlayerMap(pnj, snapshot))
                     continue;
 
                 // A target that is no longer classifiable is invalid and is abandoned.
