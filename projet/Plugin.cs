@@ -64,6 +64,7 @@ namespace EtatJoueurMod
                 InitializeSurvivalConfiguration();
                 BrainContext.Settings = new PluginBrainSettings();
                 BrainContext.Log = new PluginBrainLog();
+                BrainContext.Services = new ClientPlannerServices();
                 _targetCatalogDisconnectHandler =
                     DelegateSupport.ConvertDelegate<Il2CppSystem.Action>(new Action(ResetSessionCatalogs));
                 NetworkClient.OnDisconnectedEvent -= _targetCatalogDisconnectHandler;
@@ -311,5 +312,28 @@ namespace EtatJoueurMod
     {
         public void Warning(string message) { Plugin.Logger.LogWarning(message); }
         public void Error(string message) { Plugin.Logger.LogError(message); }
+    }
+
+    // Services du jeu fournis au planificateur : lecture de l'état de collecte et du catalogue de cibles.
+    internal sealed class ClientPlannerServices : IPlannerServices
+    {
+        public CollectConfirmationState GetCollectConfirmation(
+            EtatJeuSnapshot snapshot, uint netId, string collectibleType,
+            DateTime startedAtUtc, long callbackSequenceBaseline, long rewardSequenceBaseline)
+        {
+            return GameState.ObtenirConfirmationCollecte(
+                snapshot, netId, collectibleType, startedAtUtc,
+                callbackSequenceBaseline, rewardSequenceBaseline);
+        }
+
+        public void GetCollectSequences(out long callbackSequence, out long rewardSequence)
+        {
+            GameState.ObtenirSequencesConfirmationCollecte(out callbackSequence, out rewardSequence);
+        }
+
+        public bool TryGetWeaponCategory(string name, out TargetCategory category)
+        {
+            return TargetCatalog.TryGetCategory(name, out category);
+        }
     }
 }

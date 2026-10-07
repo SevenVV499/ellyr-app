@@ -2,7 +2,6 @@ using System;
 using System.Globalization;
 using System.Collections.Generic;
 using EtatJoueurMod;
-using UnityEngine;
 
 public enum CombatCollectPriority
 {
@@ -367,7 +366,7 @@ public sealed class BluePencil
             return false;
         }
 
-        CollectConfirmationState confirmation = GameState.ObtenirConfirmationCollecte(
+        CollectConfirmationState confirmation = BrainContext.Services.GetCollectConfirmation(
             snapshot,
             context.NetId,
             context.Type,
@@ -682,7 +681,7 @@ public sealed class BluePencil
     {
         long callbackSequence;
         long rewardSequence;
-        GameState.ObtenirSequencesConfirmationCollecte(
+        BrainContext.Services.GetCollectSequences(
             out callbackSequence,
             out rewardSequence);
 
@@ -962,7 +961,7 @@ public sealed class BluePencil
             return true;
         }
 
-        return TargetCatalog.TryGetCategory(pnj.Nom, out category);
+        return BrainContext.Services.TryGetWeaponCategory(pnj.Nom, out category);
     }
 
     /*

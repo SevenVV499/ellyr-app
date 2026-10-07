@@ -30,6 +30,7 @@ namespace EtatJoueurMod
     {
         private static IBrainSettings _settings;
         private static IBrainLog _log;
+        private static IPlannerServices _services;
 
         // Réglages neutres tant que le client n'a rien renseigné : tout est désactivé.
         private sealed class DefaultSettings : IBrainSettings
@@ -51,6 +52,30 @@ namespace EtatJoueurMod
             public void Error(string message) { }
         }
 
+        // Services neutres tant que le client n'a rien renseigné : aucune confirmation, aucune catégorie.
+        private sealed class NullServices : IPlannerServices
+        {
+            public CollectConfirmationState GetCollectConfirmation(
+                EtatJeuSnapshot snapshot, uint netId, string collectibleType,
+                DateTime startedAtUtc, long callbackSequenceBaseline, long rewardSequenceBaseline)
+            {
+                return CollectConfirmationState.None;
+            }
+
+            public void GetCollectSequences(out long callbackSequence, out long rewardSequence)
+            {
+                callbackSequence = 0;
+                rewardSequence = 0;
+            }
+
+            public bool TryGetWeaponCategory(string name, out TargetCategory category)
+            {
+                category = default(TargetCategory);
+                return false;
+            }
+        }
+
+        private static readonly IPlannerServices NullServicesValue = new NullServices();
         private static readonly IBrainSettings DefaultValues = new DefaultSettings();
         private static readonly IBrainLog NullValue = new NullLog();
 
@@ -58,6 +83,12 @@ namespace EtatJoueurMod
         {
             get { return _settings ?? DefaultValues; }
             set { _settings = value; }
+        }
+
+        public static IPlannerServices Services
+        {
+            get { return _services ?? NullServicesValue; }
+            set { _services = value; }
         }
 
         public static IBrainLog Log

@@ -9,12 +9,6 @@ using UnityEngine;
 
 namespace EtatJoueurMod
 {
-    public enum TargetCategory
-    {
-        Monster,
-        Npc
-    }
-
     public static class TargetCatalog
     {
         private static readonly object Gate = new object();
