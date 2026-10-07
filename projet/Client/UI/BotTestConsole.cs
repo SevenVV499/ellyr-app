@@ -17,10 +17,9 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private const int TabCollect = 3;
     private const int TabRaid = 4;
     private const int TabResources = 5;
-    private const int TabStatus = 6;
-    private const int TabEvents = 7;
+    private const int TabEvents = 6;
     private static readonly string[] TabLabels =
-        { "Contrôle", "Survie", "Cibles", "Collecte", "Carte Raid", "Ressources", "État", "Événements" };
+        { "Paramètres", "Santé", "Cibles", "Collecte", "Raid", "Ressources", "Annonces" };
 
     private const float HeaderHeight = 30f;
     private const float NavHeight = 30f;
@@ -125,6 +124,11 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private GUIStyle _sPopup;
     private GUIStyle _sItemHover;
     private GUIStyle _sTip;
+    private GUIStyle _sTgOff;
+    private GUIStyle _sTgOn;
+    private GUIStyle _sRight;
+    private Texture2D _texPlay;
+    private Texture2D _texStop;
     private readonly List<Texture2D> _icons = new List<Texture2D>();
     private TargetCategory _ddCategory;
     private string _ddName;
@@ -210,8 +214,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             case TabCollect: DrawCollectTab(); break;
             case TabRaid: DrawRaidTab(); break;
             case TabResources: DrawResourcesTab(); break;
-            case TabEvents: DrawEventsTab(); break;
-            default: DrawStatusTab(); break;
+            default: DrawEventsTab(); break;
         }
         GUILayout.EndScrollView();
         GUILayout.EndArea();
@@ -245,17 +248,18 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
     private void DrawHeader()
     {
-        DrawDot(new Rect(_panel.x + 12f, _panel.y + 11f, 8f, 8f), ColAccent);
-        GUI.Label(new Rect(_panel.x + 26f, _panel.y + 5f, 60f, 20f), "ELLYR", _sTitle);
+        GUI.Label(new Rect(_panel.x + 12f, _panel.y + 5f, 50f, 20f), "ELLYR", _sTitle);
+        DrawDot(new Rect(_panel.x + 60f, _panel.y + 11f, 8f, 8f), StateColor());
 
         bool running = CopperWire.AutomationEnabled;
-        Rect play = new Rect(_panel.xMax - 70f, _panel.y + 5f, 60f, 20f);
-        if (GUI.Button(play, running ? "Arrêter" : "Lancer", running ? _sBtnDanger : _sBtnPrimary))
+        Rect play = new Rect(_panel.xMax - 46f, _panel.y + 5f, 34f, 20f);
+        if (GUI.Button(play, GUIContent.none, running ? _sBtnDanger : _sBtnPrimary))
             CopperWire.SetAutomationEnabled(!running);
-
-        Rect state = new Rect(_panel.x + 78f, _panel.y + 5f, play.x - _panel.x - 84f, 20f);
-        DrawDot(new Rect(state.x, state.y + 6f, 8f, 8f), StateColor());
-        GUI.Label(new Rect(state.x + 13f, state.y, state.width - 13f, state.height), StateText(), PillTextStyle());
+        if (Event.current.type == EventType.Repaint)
+            DrawIcon(
+                running ? _texStop : _texPlay,
+                new Rect(play.center.x - 5f, play.center.y - 5f, 10f, 10f),
+                running ? ColDanger : new Color(0.02f, 0.06f, 0.12f, 1f));
     }
 
     private void DrawDot(Rect rect, Color color)
@@ -411,20 +415,33 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             _combatEnabled = combat;
             ApplyConfiguration();
         }
+
+        // La priorité n'a de sens que si les deux activités sont cochées.
+        if (_collectEnabled && _combatEnabled)
+        {
+            bool combatFirst = _priority == CombatCollectPriority.Combat;
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Priorité", _sMuted, GUILayout.Width(50f), GUILayout.Height(22f));
+            GUILayout.Label("Collecte", combatFirst ? _sMuted : _sLabelClip, GUILayout.Width(52f), GUILayout.Height(22f));
+            bool combatSide = TwoWaySwitch(combatFirst);
+            GUILayout.Label("Combat", combatSide ? _sLabelClip : _sMuted, GUILayout.Height(22f));
+            GUILayout.EndHorizontal();
+            SetPriority(combatSide ? CombatCollectPriority.Combat : CombatCollectPriority.Collect);
+        }
         EndCard();
 
-        BeginCard("Priorité");
-        int priority = Segmented(
-            _priority == CombatCollectPriority.Collect ? 0 : 1,
-            "Collecte d'abord",
-            "Combat d'abord");
-        SetPriority(priority == 0 ? CombatCollectPriority.Collect : CombatCollectPriority.Combat);
-        EndCard();
+        BeginCard("Modules");
+        bool repair = Switch(Plugin.RepairEnabled, "Réparation");
+        if (repair != Plugin.RepairEnabled)
+            Plugin.SetRepairEnabled(repair);
 
-        BeginCard("Combat");
-        bool longRange = Switch(CopperWire.LongRange, "Espacement longue portée");
-        if (longRange != CopperWire.LongRange)
-            CopperWire.SetLongRange(longRange);
+        bool respawn = Switch(Plugin.RespawnEnabled, "Réapparition");
+        if (respawn != Plugin.RespawnEnabled)
+            Plugin.SetRespawnEnabled(respawn);
+
+        bool raid = Switch(Plugin.RaidEnabled, "Carte Raid");
+        if (raid != Plugin.RaidEnabled)
+            Plugin.SetRaidEnabled(raid);
         EndCard();
     }
 
@@ -469,19 +486,19 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
     private void DrawRaidTab()
     {
-        BeginCard("Raid");
-        bool raid = Switch(Plugin.RaidEnabled, "Entrer automatiquement");
-        if (raid != Plugin.RaidEnabled)
-            Plugin.SetRaidEnabled(raid);
+        EtatJeuSnapshot raidSnapshot = GameState.ObtenirSnapshot();
+        FicheJoueur player = raidSnapshot == null ? null : raidSnapshot.Joueur;
+
+        BeginCard("Raid", player == null ? null : "Niveau " + player.Niveau);
         bool bossPriority = Switch(Plugin.RaidBossPriority, "Boss en priorité");
         if (bossPriority != Plugin.RaidBossPriority)
             Plugin.SetRaidBossPriority(bossPriority);
         DrawFullHealthSwitch();
+        DrawLongRangeSwitch();
 
-        EtatJeuSnapshot raidSnapshot = GameState.ObtenirSnapshot();
-        if (raidSnapshot != null && raidSnapshot.Joueur != null)
+        if (player != null)
         {
-            int damage = raidSnapshot.Joueur.RaidHasar;
+            int damage = player.RaidHasar;
             int cap = RulesData.Raid.BossDamageCap;
             GUILayout.Space(4f);
             Row("Dégâts boss", damage.ToString("N0", CultureInfo.InvariantCulture).Replace(',', '.')
@@ -490,12 +507,12 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         }
         EndCard();
 
-        BeginCard("Petite Raid");
+        BeginCard("Petite Raid", player == null ? null : "Talisman " + player.Talisman);
         DrawRaidTargetRow("Sunburst", "mob");
         DrawRaidTargetRow("Ameterasu", "boss");
         EndCard();
 
-        BeginCard("Grande Raid");
+        BeginCard("Grande Raid", player == null ? null : "Talisman " + player.TalismanAcemi);
         DrawRaidTargetRow("Léviathan", "mob");
         DrawRaidTargetRow("Behemoth", "boss");
         EndCard();
@@ -530,10 +547,6 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         EndCard();
 
         BeginCard("Réparation");
-        bool repair = Switch(Plugin.RepairEnabled, "Réparation activée");
-        if (repair != Plugin.RepairEnabled)
-            Plugin.SetRepairEnabled(repair);
-
         int repairMode = Segmented(
             Plugin.RepairPausesActivity ? 1 : 0,
             "En activité",
@@ -565,6 +578,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         RefreshDisplayCatalogs();
 
         DrawFullHealthSwitch();
+        DrawLongRangeSwitch();
         Divider();
 
         DrawTargetGroup(TargetCategory.Npc, "NPC");
@@ -577,6 +591,14 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         bool fullHealth = Switch(Plugin.OnlyFullHealthTargets, "Cibles à PV max seulement");
         if (fullHealth != Plugin.OnlyFullHealthTargets)
             Plugin.SetOnlyFullHealthTargets(fullHealth);
+    }
+
+    // Même réglage que l'ancienne case de Contrôle : accessible depuis Cibles et Raid.
+    private void DrawLongRangeSwitch()
+    {
+        bool longRange = Switch(CopperWire.LongRange, "Longue portée");
+        if (longRange != CopperWire.LongRange)
+            CopperWire.SetLongRange(longRange);
     }
 
     private void DrawCollectTab()
@@ -681,71 +703,38 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         GUILayout.Space(4f);
     }
 
-    private void DrawStatusTab()
-    {
-        BehaviorAction action = CopperWire.CurrentAction;
-
-        BeginCard("Bot");
-        Row("Système", CopperWire.SystemState == BehaviorSystemState.Respawn ? "Réapparition" : "Normal");
-        Row("Action", action == null ? "Aucune" : ActionLabel(action.Type) + " / " + ActionStateLabel(action.State));
-        Row("Raid", RaidRules.Description);
-        Row("Réapparition", RespawnRules.IsActive
-            ? RespawnRules.IsAbandoned ? "active (tentatives abandonnées)" : "active"
-            : "inactive");
-
-        CombatTarget target = CopperWire.CurrentCombatTarget;
-        if (target != null)
-        {
-            string category = target.WeaponCategory.HasValue
-                ? target.WeaponCategory.Value.ToString()
-                : "non classée";
-            Row("Cible", target.Name + " (" + category + ")"
-                + (string.IsNullOrEmpty(target.Category) ? string.Empty : " / " + target.Category)
-                + (string.IsNullOrEmpty(target.Type) ? string.Empty : " / " + target.Type));
-            if (target.WeaponCategory.HasValue)
-            {
-                TargetCategory weapon = target.WeaponCategory.Value;
-                Row("Munitions", "voulues " + DescribeAmmo(weapon, target.AmmoId)
-                    + " | sélectionnées " + DescribeAmmo(weapon, CopperWire.GetSelectedAmmoId(weapon)));
-            }
-        }
-        else if (action != null && action.Type == BehaviorActionType.Collect)
-        {
-            CollectActionContext context = action.Context as CollectActionContext;
-            Row("Collectible", context == null ? "inconnu" : "NetId " + context.NetId);
-        }
-        EndCard();
-
-        EtatJeuSnapshot snapshot = GameState.ObtenirSnapshot();
-        FicheJoueur player = snapshot == null ? null : snapshot.Joueur;
-        BeginCard("Joueur");
-        if (player == null)
-        {
-            Hint("En attente d'un instantané GameState.");
-        }
-        else
-        {
-            Row("PV", player.Vie + " / " + player.VieMax);
-            Row("Portée", "canon " + FormatNumber(player.Portee)
-                + " | harpon " + FormatNumber(player.PorteeHarpon));
-            Row("Carte", player.Harita
-                + (string.IsNullOrEmpty(player.NomHarita) ? string.Empty : " / " + player.NomHarita));
-            Row("Position", (player.CoordonneeSayi ?? "?") + " " + (player.CoordonneeHarf ?? "?")
-                + " | monde " + FormatNumber(player.X) + ", " + FormatNumber(player.Y));
-            Row("Niveau", player.Niveau.ToString());
-            Row("Talismans", "acemi " + player.TalismanAcemi + " | tilsim " + player.Talisman);
-        }
-        EndCard();
-    }
-
     // ------------------------------------------------------------------ Composants
 
     // Section sans cadre : un petit titre, le contenu, puis un filet fin.
-    private void BeginCard(string title)
+    private void BeginCard(string title, string right = null)
     {
         GUILayout.BeginVertical();
+        GUILayout.BeginHorizontal();
         GUILayout.Label(title.ToUpperInvariant(), _sCardTitle);
+        if (!string.IsNullOrEmpty(right))
+            GUILayout.Label(right, _sRight, GUILayout.ExpandWidth(true));
+        GUILayout.EndHorizontal();
         GUILayout.Space(3f);
+    }
+
+    // Interrupteur à deux positions : false = gauche, true = droite.
+    private bool TwoWaySwitch(bool right)
+    {
+        Rect r = GUILayoutUtility.GetRect(30f, 22f, GUILayout.Width(30f), GUILayout.Height(22f));
+        Rect track = new Rect(r.x, r.y + 3f, 30f, 16f);
+        Event e = Event.current;
+        if (e.type == EventType.MouseDown && e.button == 0 && r.Contains(e.mousePosition))
+        {
+            right = !right;
+            e.Use();
+        }
+
+        if (e.type == EventType.Repaint)
+        {
+            GUI.Box(track, GUIContent.none, right ? _sTgOn : _sTgOff);
+            DrawDot(new Rect(right ? track.xMax - 13f : track.x + 3f, track.y + 3f, 10f, 10f), ColText);
+        }
+        return right;
     }
 
     private void EndCard()
@@ -917,7 +906,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         {
             if (open)
                 _ddAnchor = GUIUtility.GUIToScreenRect(r);
-            DrawIcon(_icons[8], new Rect(r.xMax - 17f, r.center.y - 7f, 14f, 14f), ColMuted);
+            DrawIcon(_icons[7], new Rect(r.xMax - 17f, r.center.y - 7f, 14f, 14f), ColMuted);
         }
     }
 
@@ -1212,6 +1201,48 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         return texture;
     }
 
+    // Triangle plein (icône « lancer »), anti-aliasé par échantillonnage 4 x 4.
+    private static Texture2D PlayTexture(int size)
+    {
+        string key = "play|" + size;
+        Texture2D cached;
+        if (RoundCache.TryGetValue(key, out cached) && cached != null)
+            return cached;
+
+        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        texture.filterMode = FilterMode.Bilinear;
+        texture.wrapMode = TextureWrapMode.Clamp;
+        Vector2 a = new Vector2(0.24f, 0.08f) * size;
+        Vector2 b = new Vector2(0.24f, 0.92f) * size;
+        Vector2 c = new Vector2(0.92f, 0.5f) * size;
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                int hits = 0;
+                for (int sy = 0; sy < 4; sy++)
+                {
+                    for (int sx = 0; sx < 4; sx++)
+                    {
+                        Vector2 p = new Vector2(x + (sx + 0.5f) / 4f, y + (sy + 0.5f) / 4f);
+                        float d1 = (p.x - b.x) * (a.y - b.y) - (a.x - b.x) * (p.y - b.y);
+                        float d2 = (p.x - c.x) * (b.y - c.y) - (b.x - c.x) * (p.y - c.y);
+                        float d3 = (p.x - a.x) * (c.y - a.y) - (c.x - a.x) * (p.y - a.y);
+                        bool negative = d1 < 0f || d2 < 0f || d3 < 0f;
+                        bool positive = d1 > 0f || d2 > 0f || d3 > 0f;
+                        if (!(negative && positive))
+                            hits++;
+                    }
+                }
+                texture.SetPixel(x, y, new Color(1f, 1f, 1f, hits / 16f));
+            }
+        }
+        texture.Apply();
+        texture.hideFlags = HideFlags.HideAndDontSave;
+        RoundCache[key] = texture;
+        return texture;
+    }
+
     private static float DistanceToSegment(Vector2 p, Vector2 a, Vector2 b)
     {
         Vector2 ab = b - a;
@@ -1294,10 +1325,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             case 5: // barres
                 lines.Add(Poly(4, 13, 4, 8)); lines.Add(Poly(8, 13, 8, 3)); lines.Add(Poly(12, 13, 12, 6));
                 break;
-            case 6: // pouls
-                lines.Add(Poly(1, 8, 5, 8, 7, 3, 9, 13, 11, 8, 15, 8));
-                break;
-            case 7: // horloge
+            case 6: // horloge
                 rings.Add(new Vector3(8, 8, 6f));
                 lines.Add(Poly(8, 4.5f, 8, 8, 10.5f, 9.5f));
                 break;
@@ -1373,8 +1401,10 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         _texBoxHover = RoundTexture(13, 3, ColBox, ColMuted, 1f);
         _texBoxOn = RoundTexture(13, 3, ColAccent, ColAccent, 1f);
         _texCheck = CheckTexture(13, new Color(0.02f, 0.06f, 0.12f, 1f));
+        _texPlay = PlayTexture(10);
+        _texStop = RoundTexture(10, 2, Color.white, Color.white, 0f);
         _icons.Clear();
-        for (int i = 0; i < 9; i++)
+        for (int i = 0; i < 8; i++)
             _icons.Add(BuildIcon(i));
 
         _sWindow = CloneStyle(skin.box);
@@ -1472,6 +1502,16 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         RoundPaint(_sPopup, new Color(0.075f, 0.098f, 0.133f, 1f), new Color(0.075f, 0.098f, 0.133f, 1f), ColText, ColBoxEdge, ColBoxEdge, 6);
         _sPopup.padding = new RectOffset(0, 0, 0, 0);
         _sPopup.margin = new RectOffset(0, 0, 0, 0);
+
+        _sTgOff = CloneStyle(_sBtn);
+        RoundPaint(_sTgOff, ColField, ColField, ColText, ColBoxEdge, ColBoxEdge, 8);
+        _sTgOn = CloneStyle(_sBtn);
+        RoundPaint(_sTgOn, ColSel, ColSel, ColText, ColAccent, ColAccent, 8);
+
+        _sRight = CloneStyle(_sMuted);
+        _sRight.alignment = TextAnchor.MiddleRight;
+        _sRight.fontSize = 10;
+        _sRight.wordWrap = false;
 
         _sTip = CloneStyle(_sPopup);
         _sTip.alignment = TextAnchor.MiddleCenter;

@@ -83,6 +83,14 @@ public static class RespawnRules
 
         _now = now;
 
+        // Module désactivé dans la console : aucune réapparition, et une tentative en cours est abandonnée.
+        if (!BrainContext.Settings.RespawnEnabled)
+        {
+            if (_active)
+                Reset();
+            return;
+        }
+
         if (_brain == null && !_brainWarned)
         {
             _brainWarned = true;

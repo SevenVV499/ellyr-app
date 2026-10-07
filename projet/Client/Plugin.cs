@@ -34,6 +34,7 @@ namespace EtatJoueurMod
         private static ConfigEntry<bool> _repairPausesActivity;
         private static ConfigEntry<bool> _raidEnabled;
         private static ConfigEntry<bool> _raidBossPriority;
+        private static ConfigEntry<bool> _respawnEnabled;
         private static ConfigEntry<bool> _onlyFullHealthTargets;
         private static readonly Dictionary<string, ConfigEntry<bool>> CollectibleTypeSettings =
             new Dictionary<string, ConfigEntry<bool>>(StringComparer.Ordinal);
@@ -141,6 +142,16 @@ namespace EtatJoueurMod
             SetSetting(_raidBossPriority, enabled);
         }
 
+        public static bool RespawnEnabled
+        {
+            get { return _respawnEnabled == null || _respawnEnabled.Value; }
+        }
+
+        public static void SetRespawnEnabled(bool enabled)
+        {
+            SetSetting(_respawnEnabled, enabled);
+        }
+
         public static bool RaidEnabled
         {
             get { return _raidEnabled != null && _raidEnabled.Value; }
@@ -211,6 +222,8 @@ namespace EtatJoueurMod
                 "Repair mode: false = repair during activity, true = stop all activity (ship still) and repair, resume at full HP.");
             _raidEnabled = _config.Bind("Raid", "RaidEnabled", false,
                 "Enable the Raid map module: enter the Raid matching the player level when the medallion is available.");
+            _respawnEnabled = _config.Bind("Respawn", "RespawnEnabled", true,
+                "Respawn module: when true, the bot presses the respawn button after a death; when false it does nothing on death.");
             _raidBossPriority = _config.Bind("Raid", "RaidBossPriority", true,
                 "Raid maps: true = attack the boss first when it is visible; false = ignore the boss, only the mobs.");
             _fleePercent = _config.Bind("Survival", "FleePercent", 60,
@@ -309,6 +322,7 @@ namespace EtatJoueurMod
         public bool OnlyFullHealthTargets { get { return Plugin.OnlyFullHealthTargets; } }
         public bool RaidEnabled { get { return Plugin.RaidEnabled; } }
         public bool RaidBossPriority { get { return Plugin.RaidBossPriority; } }
+        public bool RespawnEnabled { get { return Plugin.RespawnEnabled; } }
     }
 
     internal sealed class PluginBrainLog : IBrainLog

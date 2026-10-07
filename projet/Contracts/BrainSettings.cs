@@ -19,6 +19,7 @@ namespace EtatJoueurMod
         bool OnlyFullHealthTargets { get; }
         bool RaidEnabled { get; }
         bool RaidBossPriority { get; }
+        bool RespawnEnabled { get; }
     }
 
     public interface IBrainLog
@@ -48,6 +49,7 @@ namespace EtatJoueurMod
             public bool OnlyFullHealthTargets { get { return false; } }
             public bool RaidEnabled { get { return false; } }
             public bool RaidBossPriority { get { return true; } }
+            public bool RespawnEnabled { get { return true; } }
         }
 
         private sealed class NullLog : IBrainLog
