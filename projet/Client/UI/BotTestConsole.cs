@@ -129,6 +129,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private GUIStyle _sRight;
     private Texture2D _texPlay;
     private Texture2D _texStop;
+    private Texture2D _texLogo;
     private readonly List<Texture2D> _icons = new List<Texture2D>();
     private TargetCategory _ddCategory;
     private string _ddName;
@@ -248,8 +249,10 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
     private void DrawHeader()
     {
-        GUI.Label(new Rect(_panel.x + 12f, _panel.y + 5f, 50f, 20f), "ELLYR", _sTitle);
-        DrawDot(new Rect(_panel.x + 60f, _panel.y + 11f, 8f, 8f), StateColor());
+        if (_texLogo != null && Event.current.type == EventType.Repaint)
+            GUI.DrawTexture(new Rect(_panel.x + 10f, _panel.y + 6f, 18f, 18f), _texLogo);
+        GUI.Label(new Rect(_panel.x + 34f, _panel.y + 5f, 50f, 20f), "ELLYR", _sTitle);
+        DrawDot(new Rect(_panel.x + 82f, _panel.y + 11f, 8f, 8f), StateColor());
 
         bool running = CopperWire.AutomationEnabled;
         Rect play = new Rect(_panel.xMax - 46f, _panel.y + 5f, 34f, 20f);
@@ -1243,6 +1246,91 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         return texture;
     }
 
+    // Logo 32 x 32 (RGBA, ligne du haut en premier) intégré au code : aucun fichier à déployer.
+    private static readonly string LogoBase64 =
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/AP8C/wD/AQAAAAC/OM0kyjzSRAAAAAD/AP8D/1X/AwAAAAAAAAAAAAAAAAAA" +
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP8B/1X/AwAAAAAAAAAB" +
+            "0DzgXdgs+OLfRPf25WbqjJsqxhIAAAAA/6r/A39/fwIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+            "AAAAAAAAAAAAAAAAAAAAAAAAqgCqAwAAAAAAAAAA2DfdLt0z8rnbI///xw7//8YN///nOf//6m710tp150wAAAAAAAAAAL9/vwT/AP8BAAAAAAAAAAAAAAAA" +
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/wD/Af9//wIAAAAAAABVBtg36XjZKfnzyhT//7QJ//y5Df3+vhH//sAL" +
+            "//zZJP//61/+/+WB7p+7ZtQeAAAAAP+q/wP/f/8CAAD/AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKpV/wMAAAAA" +
+            "AAAAANc94DrZL/TD0hr//7QK//+vCv/8tA7//7UO/f65Ef3+wRX//8IU//3KFf/+7Eb//+t6+Ofbdu1yAABmBQAAAAB/VaoGPwB/BAAAAAAAAAAAAAAAAAAA" +
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAP8A/wH/Vf8DAAAAAFUVqgzcOuqM2yv6+sAQ//+nBv/8rAz//q0M/v+tDv/+uhH//8IV///AFv//wBj+/8cd///JGP/8" +
+            "2ir///Nr///pifW6vGbgMgAAAAB/P78EAAAAAAAAAAAAAP8B////AQAA/wEAAAAAAAAAAAAAAAD/AP8CAAAAAAAAAADSPN1E3jP1z9Qf//+tCP//pgn//KkM" +
+            "//+lDP3+qgz//7YQ//+cDOTbkA7S0MAY/fjDG///wh3+/8ki///MIv/+0CL//OpO///ufvn22W3oez8AfwT///8BAAD/AQAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+            "AAAAAAAAAAC8JcYb3jbul9Uo+/+9D///owX//KYK//6lC/7/oQr8/qsN//+pDfv0ewfExEEAhqxLAJzNcQW/5qsW7fLDIP/+xCP+/8gl///LLP7/yCj8+uA9" +
+            "///WUfbqMwCZCv///wF/KqoGY1zYl4eW7MCOktU9AAAAAP8A/wIAAAAAxTnXOt0v9eDKGP//pgb//qEH/f2jCf//nwn9/qIK//+rC///lwrq3FYCnrM8AISl" +
+            "TQObUmgCvWJjAb3qYwDE958W5fTAJv/+uyb+/7wp/P7BLv/8xzP//6Io4KgAAKoDAAAAAAAAAAAkK70jW2vRMniGyRMAAAAAvz//BAAAAADCLdaXzhr//5sA" +
+            "//iiB/7/oAb//5wH/f6lCP//oQn79HgGxsJAAImuRgCSjVYAoiwAAAAAAAAAAF0EujSSFd7qqiP2/aki//6sI/39tSj//7Ms+v+DI9CjDw+nIH///wJiMdUf" +
+            "fzPhaKFO6mKnT909AAAAAAAA/wH/f/8CAAAAAK8f1aG/FP/9nAP//J0F//+bBf//pAb//5EF59dRAZywOwCFpksAnFtmAP8FAQAAAAAAAACsKc0fuSvzr6wk" +
+            "//qbHf/9nyH//awl//+cJurqdBvFgQAAcQkAAAAAAAAAAFEAuRZ6MOR/mE3pgaZe5VkAAP8B/wD/Af///wEAAAABpxvOp7wU//+VAf/8lwP//pkE/Pp4AsvA" +
+            "OQB/oEAAjIpNAKsrAAAAAKoA/wMAAAAAqijaP7An9t6lHv//jxr9/ZYe//6gIf//iiLfw1YipDsAAAAA/6r/A1Vx2TZVqepWYLrmSgADAAAAAAAAZlWqDwAA" +
+            "AAAAAP8B////AQAAAAKmF86itxH//44A/fyVAv//hwHw7DgAgJ9CAJJgbQD/BwAAAAAAAAAAAAAAAKUe53WlHPn6lBb//4oW/fmSHP//kh74/3oe05gAABkK" +
+            "AAAAAAAAAAAAAAAAKHu9Rjmx5JhTseqiXnndLpFt/wd1YtcNAAAAAAAAAAD/f/8CAAAAAKga0pmyD///igD9/JAA//+BAO7vQwCRpzUAihj/AP8BAAAAAH8M" +
+            "pRSaE+6nmxb//4YQ//6FE//6jxn//4Yb7+lhHbyDABiFFQEBAQA/P78Ec07gfoln7aCUbeyXjlHgbQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP9//wIAAAAA" +
+            "rBvRl64N//+HAP38jAD//34A7u1DAJGqSgCUHwAAAACRC9NBkwv01Y4M//9+DP/7ghD//YsV//99Gem/VhSTMgAAAAAAAAAAAAAAAAAAAABpUeJtd2TvhIJx" +
+            "7YV9a+hmP1+/CDuR1jhBptUrAAD/AQAAAAAAAAAAAgABAAAAfwKgFNClqwz//4QA/fyKAP//fgDu7kIAk6o1AJQrkgzoeowI9/uFB///fAj9+YIO//+FEfz/" +
+            "eBfgjDYkSA5mP+sodknocnNj6WFOddcNGmuhEwC/PwgAAAAAAAAAAAAAAAAYJLYVM6LkmkDJ5XcAAAAA////AQAAAAABAAEAHwB/CJ8U06OmCv//ggD9/IgA" +
+            "//96AOzsRAGLlIsH6MONBv//fgT//3sH//mECv//fhD1728Y014AAAAAAAAAAGEf31lyTPXRiV3zrhqf01gR5O/pOObw61vl7+1h4e7xQb3cQh9fvwgAAAAA" +
+            "AAAAAAAAAAAAAAAAAAAAAAIAAQAAAGYFnxHQq6UJ//+BAP/8hAD//30A9O6CAvHgiAL//3sC/fx7BP/8hgn//30L78dTE7o0AAAAAAIAAQARRLsPD7zRMgfM" +
+            "1EILz9NAFsTbZRfV56Em2+emON7qqzHS5mg6xNcNAP//Aip/1AYAVaoDAAAAAAAAAAAAAAAAAQAAAAAAVQagEtClpQn//4EA//2BAP//fwD//4EA//96Af37" +
+            "fgT//4QG//97CuSjNiRbDgAAAAB/P/8EAEyyChSp1YYV1ezKDd7t6Qvt9v8J/f7/Cvv89hz7/PhZ9/rlANfrDQAAAAAAVaoDAD+/BAB//wIAAAAAAAAAAAAA" +
+            "AAD/AP8BAAAAAaMU0YukCP//gAD//YEA//99AP/+egD9+4IC//+FBvf2eQnZbQAAAAMAAAEAVQCqAwAAAAAAAH8CAGLEDQAAXwgAhaoVBdnnsAD///8A//39" +
+            "Ef///1X39+8S0docAAAAAQD//wEAAAAAAAEAAAAAAAAAAAAAAAAAAP8A/wE/AH8Eng7TkaIH//9+AP/9gQD//n0A//yIAf//ggTx3msKv0wAAgAA/6r/A/8A" +
+            "/wEAAAAAAAAAAAAAAAAAAP8BGbLlCgAAAAAJ4eqMAv///wH9/foP////WPf47g/Q2CEAAAAAAP//AQAAAAAAAAAAAAAAAAAAAAAAAAAAAQABAAAAVQmYDtGd" +
+            "oQb//4EA//uEAP//jQH//4QE6bFoE7AnAAAAAAAAAAAAAAAAf///An9/fwIAAAAAAAAAAB+f3wgAAAAAAAAAABDl66wC////AP39+w7///9V+PnoCtTUGAAA" +
+            "AAAA//8BAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAEQBmD5gJ0qGhBf/9iQD//5MC+vuJBOF6KioABgAAAACtW78cronvkZ+Q4mMAAAAAAAAAAH+//wQAAQEA" +
+            "AAAAADq30Scq6fK1C/z+/wD9//4B///9Df///ln4+eAPpcMRAAAAAAD//wEAAAABAAAAAAAAAAAAAAAAAAAAAP8A/wFVAFUDmgrVjLIG//+UAfLoeALFWQAA" +
+            "AAAAAAAAoFXdXJJh+N9lWP//bX7+/5az8J6jo78cAAAAAAAAAAFH3ehkJe/47An///8A+v/+Af///wD9/fwO////Vfn58hXJyRgAAAAAAP//AQAAAAAAAAAA" +
+            "AAAAAAAAAAAAAAAA/wD/AwAAAACfCd9wpQbtzG0FsDEAAAAAoyjWGZRF75B5Rv7/SDz//zBL//skX//9PZf//2q+9+R6yOFmRt3triLz//8A7///APf//AD9" +
+            "/v8A/f38EP///yv4+foo4+aKAMbGCQAAAAEA//8BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAIsAuRY/AH8QAAAAAH8A/wJ6KeWeeTf//z0s//02Rv37" +
+            "LGH//x54/v8KiP38DKf//zTU//8V3P//AN39/QHv/f4A+f3+Av///R7///8q7vHcGdPbRwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+            "AAAAAAAAAAAAAAAAAAB/AP8C/wD/ATkixRZePumCUFD5/DJY//8aZ/38EoX9/gqc/v8Br//9AL///ADR/P0B5v7/APP//An///8n/f3/JufqoQCOmRkAAAAA" +
+            "Vf//AwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/AP8B/wD/AQAAAAAAAAAAAAAAAAAAAABJXtVJO3300iOR//8Hjv//AaX9/AG6" +
+            "/v8CzP7/ANn9/gDq//wV////IfDz6xHU2VkAAAAAAQAAAAC/vwQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+            "AAAAAAAAAAAAAP8BVVX/AwAAAAAAcY0SLqvlihu6+fgHwv//AL/7/ADO/PwI5///Hv///x/m6rgAtsIuAAAAAH///wIA//8BAAAAAAAAAAAAAAAAAAAAAAAA" +
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf3//AgAAAAAAAAAAHbfMPRjZ9McM4///E/H//yD29/cU2N5+" +
+            "AABVCQAAAAAAv78EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+            "AAAAAAAAAG2RBxJ/ow4AAAAAAAA/CBfZ54Aa5uu0AMTMPQAAAAB///8CAP//AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf38CAD9/BACqqgMAAAAAAAAAAAAAAAAAAAAAAP//AwB/fwIAAAAAAAAAAAAA" +
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
+
+    private static Texture2D BuildLogo()
+    {
+        const int size = 32;
+        Texture2D cached;
+        if (RoundCache.TryGetValue("logo", out cached) && cached != null)
+            return cached;
+
+        byte[] raw;
+        try
+        {
+            raw = Convert.FromBase64String(LogoBase64);
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+        if (raw.Length != size * size * 4)
+            return null;
+
+        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        texture.filterMode = FilterMode.Bilinear;
+        texture.wrapMode = TextureWrapMode.Clamp;
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                int i = ((size - 1 - y) * size + x) * 4;
+                texture.SetPixel(x, y, new Color32(raw[i], raw[i + 1], raw[i + 2], raw[i + 3]));
+            }
+        }
+        texture.Apply();
+        texture.hideFlags = HideFlags.HideAndDontSave;
+        RoundCache["logo"] = texture;
+        return texture;
+    }
+
     private static float DistanceToSegment(Vector2 p, Vector2 a, Vector2 b)
     {
         Vector2 ab = b - a;
@@ -1403,6 +1491,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         _texCheck = CheckTexture(13, new Color(0.02f, 0.06f, 0.12f, 1f));
         _texPlay = PlayTexture(10);
         _texStop = RoundTexture(10, 2, Color.white, Color.white, 0f);
+        _texLogo = BuildLogo();
         _icons.Clear();
         for (int i = 0; i < 8; i++)
             _icons.Add(BuildIcon(i));
