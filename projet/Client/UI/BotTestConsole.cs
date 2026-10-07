@@ -22,9 +22,12 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private static readonly string[] TabLabels =
         { "Contrôle", "Survie", "Cibles", "Collecte", "Carte Raid", "Ressources", "État", "Événements" };
 
-    private const float HeaderHeight = 46f;
-    private const float SidebarWidth = 150f;
-    private const float FooterHeight = 22f;
+    private const float HeaderHeight = 30f;
+    private const float NavHeight = 30f;
+    private const float TitleHeight = 22f;
+    private const float BodyTop = HeaderHeight + NavHeight + TitleHeight + 4f;
+    private const float DropItemHeight = 20f;
+    private const int DropMaxRows = 7;
 
     // Palette
     private static readonly Color ColBg = new Color(0.063f, 0.082f, 0.110f, 0.98f);
@@ -43,6 +46,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private static readonly Color ColSel = new Color(0.239f, 0.608f, 1f, 0.16f);
     private static readonly Color ColSelEdge = new Color(0.239f, 0.608f, 1f, 0.45f);
     private static readonly Color ColClear = new Color(0f, 0f, 0f, 0f);
+    private static readonly Color ColNavOn = new Color(0.60f, 0.80f, 1f, 1f);
     private static readonly Color ColOk = new Color(0.24f, 0.86f, 0.59f, 1f);
     private static readonly Color ColWarn = new Color(0.96f, 0.65f, 0.14f, 1f);
     private static readonly Color ColDanger = new Color(0.95f, 0.37f, 0.36f, 1f);
@@ -63,7 +67,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private List<string> _displayNpcs = new List<string>();
     private List<string> _displayMonsters = new List<string>();
 
-    private Rect _panel = new Rect(16f, 16f, 780f, 640f);
+    private Rect _panel = new Rect(16f, 16f, 300f, 300f);
     private Vector2 _scrollPosition;
     private bool _visible = true;
     private bool _dragging;
@@ -114,6 +118,19 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private GUIStyle _sTrack;
     private GUIStyle _sTrackFill;
     private GUIStyle _sFold;
+    private GUIStyle _sLabelClip;
+    private GUIStyle _sLabelAccent;
+    private GUIStyle _sSelect;
+    private GUIStyle _sSelectOpen;
+    private GUIStyle _sPopup;
+    private GUIStyle _sItemHover;
+    private GUIStyle _sTip;
+    private readonly List<Texture2D> _icons = new List<Texture2D>();
+    private TargetCategory _ddCategory;
+    private string _ddName;
+    private Rect _ddAnchor;
+    private float _ddScroll;
+    private int _hoverTab = -1;
 
     public BotTestConsoleBehaviour(IntPtr ptr) : base(ptr)
     {
@@ -162,8 +179,8 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
     private void DrawConsole()
     {
-        _panel.width = Mathf.Min(_panel.width, Mathf.Max(520f, Screen.width - 16f));
-        _panel.height = Mathf.Min(_panel.height, Mathf.Max(320f, Screen.height - 16f));
+        _panel.width = Mathf.Min(_panel.width, Mathf.Max(260f, Screen.width - 16f));
+        _panel.height = Mathf.Min(_panel.height, Mathf.Max(220f, Screen.height - 16f));
         _panel.x = Mathf.Clamp(_panel.x, 0f, Mathf.Max(0f, Screen.width - _panel.width));
         _panel.y = Mathf.Clamp(_panel.y, 0f, Mathf.Max(0f, Screen.height - _panel.height));
 
@@ -171,15 +188,19 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         _pointerOverConsole = _dragging
             || (current != null && _panel.Contains(current.mousePosition));
 
+        Rect body = new Rect(_panel.x + 10f, _panel.y + BodyTop, _panel.width - 20f, _panel.height - BodyTop - 8f);
+        HandleDropdownInput(body);
+
         GUI.Box(_panel, GUIContent.none, _sWindow);
         HandleDrag();
         DrawHeader();
-        DrawSidebar();
+        DrawNav();
+        GUI.Label(
+            new Rect(_panel.x + 12f, _panel.y + HeaderHeight + NavHeight + 4f, _panel.width - 24f, TitleHeight),
+            TabLabels[_activeTab],
+            _sTitle);
 
-        float bodyLeft = _panel.x + SidebarWidth + 22f;
-        float bodyTop = _panel.y + HeaderHeight + 18f;
-        float bodyHeight = _panel.height - HeaderHeight - FooterHeight - 26f;
-        GUILayout.BeginArea(new Rect(bodyLeft, bodyTop, _panel.xMax - bodyLeft - 14f, bodyHeight));
+        GUILayout.BeginArea(body);
         _scrollPosition = GUILayout.BeginScrollView(_scrollPosition);
         switch (_activeTab)
         {
@@ -195,17 +216,15 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         GUILayout.EndScrollView();
         GUILayout.EndArea();
 
-        GUI.Label(
-            new Rect(_panel.x + SidebarWidth + 22f, _panel.yMax - FooterHeight - 4f, _panel.width - SidebarWidth - 44f, FooterHeight),
-            "F8 afficher / masquer   ·   glisser l'en-tête pour déplacer",
-            _sMuted);
+        DrawDropdownOverlay(body);
+        DrawNavTooltip();
     }
 
     private void HandleDrag()
     {
         Event e = Event.current;
         // Zone de déplacement : l'en-tête sans les boutons de droite.
-        Rect grip = new Rect(_panel.x, _panel.y, _panel.width - 240f, HeaderHeight);
+        Rect grip = new Rect(_panel.x, _panel.y, _panel.width - 80f, HeaderHeight);
         if (e.type == EventType.MouseDown && grip.Contains(e.mousePosition))
         {
             _dragging = true;
@@ -226,18 +245,17 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
     private void DrawHeader()
     {
-        FillRect(new Rect(_panel.x + 1f, _panel.y + HeaderHeight, _panel.width - 2f, 1f), ColLine);
-        DrawDot(new Rect(_panel.x + 20f, _panel.y + 19f, 8f, 8f), ColAccent);
-        GUI.Label(new Rect(_panel.x + 36f, _panel.y + 11f, 200f, 24f), "ELLYR", _sTitle);
+        DrawDot(new Rect(_panel.x + 12f, _panel.y + 11f, 8f, 8f), ColAccent);
+        GUI.Label(new Rect(_panel.x + 26f, _panel.y + 5f, 60f, 20f), "ELLYR", _sTitle);
 
         bool running = CopperWire.AutomationEnabled;
-        Rect play = new Rect(_panel.xMax - 108f, _panel.y + 9f, 92f, 28f);
+        Rect play = new Rect(_panel.xMax - 70f, _panel.y + 5f, 60f, 20f);
         if (GUI.Button(play, running ? "Arrêter" : "Lancer", running ? _sBtnDanger : _sBtnPrimary))
             CopperWire.SetAutomationEnabled(!running);
 
-        Rect state = new Rect(play.x - 160f, _panel.y + 11f, 150f, 24f);
-        DrawDot(new Rect(state.x, state.y + 8f, 8f, 8f), StateColor());
-        GUI.Label(new Rect(state.x + 14f, state.y, state.width - 14f, state.height), StateText(), PillTextStyle());
+        Rect state = new Rect(_panel.x + 78f, _panel.y + 5f, play.x - _panel.x - 84f, 20f);
+        DrawDot(new Rect(state.x, state.y + 6f, 8f, 8f), StateColor());
+        GUI.Label(new Rect(state.x + 13f, state.y, state.width - 13f, state.height), StateText(), PillTextStyle());
     }
 
     private void DrawDot(Rect rect, Color color)
@@ -256,7 +274,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         {
             _pillText = CloneStyle(_sLabel);
             _pillText.alignment = TextAnchor.MiddleLeft;
-            _pillText.fontSize = 11;
+            _pillText.fontSize = 10;
             _pillText.wordWrap = false;
             _pillText.normal.textColor = ColMuted;
         }
@@ -311,22 +329,59 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         return ColOk;
     }
 
-    private void DrawSidebar()
+    private void DrawNav()
     {
-        Rect side = new Rect(_panel.x, _panel.y + HeaderHeight + 1f, SidebarWidth, _panel.height - HeaderHeight - 1f);
-        FillRect(new Rect(side.xMax, side.y + 14f, 1f, side.height - 28f), ColLine);
+        float top = _panel.y + HeaderHeight;
+        FillRect(new Rect(_panel.x + 10f, top + NavHeight, _panel.width - 20f, 1f), ColLine);
 
-        const float itemHeight = 30f;
+        float cell = (_panel.width - 16f) / TabLabels.Length;
+        Vector2 mouse = Event.current.mousePosition;
+        bool repaint = Event.current.type == EventType.Repaint;
+        _hoverTab = -1;
         for (int i = 0; i < TabLabels.Length; i++)
         {
-            Rect rect = new Rect(side.x + 12f, side.y + 16f + i * (itemHeight + 2f), side.width - 24f, itemHeight);
+            Rect rect = new Rect(_panel.x + 8f + i * cell + 1f, top + 3f, cell - 2f, NavHeight - 6f);
             bool selected = _activeTab == i;
-            if (GUI.Button(rect, TabLabels[i], selected ? _sTabOn : _sTab) && !selected)
+            bool hover = rect.Contains(mouse);
+            if (hover)
+                _hoverTab = i;
+            if (GUI.Button(rect, GUIContent.none, selected ? _sTabOn : _sTab) && !selected)
             {
                 _activeTab = i;
                 _scrollPosition = Vector2.zero;
+                CloseAmmoEditor();
             }
+            if (repaint)
+                DrawIcon(_icons[i], new Rect(rect.center.x - 7f, rect.center.y - 7f, 14f, 14f),
+                    selected ? ColNavOn : (hover ? ColText : ColMuted));
         }
+    }
+
+    private void DrawNavTooltip()
+    {
+        if (_hoverTab < 0 || Event.current.type != EventType.Repaint)
+            return;
+
+        string text = TabLabels[_hoverTab];
+        float width = text.Length * 6.4f + 16f;
+        float cell = (_panel.width - 16f) / TabLabels.Length;
+        float centre = _panel.x + 8f + (_hoverTab + 0.5f) * cell;
+        Rect tip = new Rect(
+            Mathf.Clamp(centre - width * 0.5f, _panel.x + 4f, _panel.xMax - width - 4f),
+            _panel.y + HeaderHeight + NavHeight + 4f,
+            width,
+            20f);
+        GUI.Box(tip, text, _sTip);
+    }
+
+    private static void DrawIcon(Texture2D icon, Rect rect, Color color)
+    {
+        if (icon == null)
+            return;
+        Color previous = GUI.color;
+        GUI.color = color;
+        GUI.DrawTexture(rect, icon);
+        GUI.color = previous;
     }
 
     private static void FillRect(Rect rect, Color color)
@@ -341,7 +396,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
     private void DrawControlTab()
     {
-        BeginCard("Activités", "Ce que le bot peut faire quand l'automatisation est lancée.");
+        BeginCard("Activités");
         bool collect = Switch(_collectEnabled, "Collecte");
         if (collect != _collectEnabled)
         {
@@ -356,10 +411,9 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             _combatEnabled = combat;
             ApplyConfiguration();
         }
-        Hint("La navigation est l'activité par défaut quand rien d'autre ne s'applique.");
         EndCard();
 
-        BeginCard("Priorité", "Utilisée quand un collectible et une cible de combat sont disponibles.");
+        BeginCard("Priorité");
         int priority = Segmented(
             _priority == CombatCollectPriority.Collect ? 0 : 1,
             "Collecte d'abord",
@@ -368,16 +422,9 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         EndCard();
 
         BeginCard("Combat");
-        bool longRange = Switch(CopperWire.LongRange, "Espacement de combat longue portée");
+        bool longRange = Switch(CopperWire.LongRange, "Espacement longue portée");
         if (longRange != CopperWire.LongRange)
             CopperWire.SetLongRange(longRange);
-
-        bool fullHealth = Switch(Plugin.OnlyFullHealthTargets, "Attaquer uniquement les cibles à PV max");
-        if (fullHealth != Plugin.OnlyFullHealthTargets)
-            Plugin.SetOnlyFullHealthTargets(fullHealth);
-        Hint(Plugin.OnlyFullHealthTargets
-            ? "Seuls les NPC et monstres à PV max sont engagés ; les cibles déjà entamées sont ignorées."
-            : "Toutes les cibles sélectionnées peuvent être engagées, même déjà entamées.");
         EndCard();
     }
 
@@ -385,13 +432,13 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     {
         float elapsed = ResourceTracker.ElapsedSeconds;
 
-        BeginCard("Ressources", "Variation nette depuis la dernière remise à zéro (gains moins dépenses).");
-        Row("Durée", FormatDuration(elapsed));
-        if (GUILayout.Button("Remise à zéro", _sBtn, GUILayout.Height(26f)))
+        GUILayout.BeginHorizontal();
+        GUILayout.Label(FormatDuration(elapsed), _sLabel);
+        if (GUILayout.Button("Remise à zéro", _sBtn, GUILayout.Width(100f), GUILayout.Height(20f)))
             ResourceTracker.Reset();
-        EndCard();
+        GUILayout.EndHorizontal();
+        Divider();
 
-        BeginCard("Compteurs");
         IReadOnlyList<ResourceTracker.Counter> counters = ResourceTracker.Counters;
         int shown = 0;
         for (int i = 0; i < counters.Count; i++)
@@ -402,17 +449,14 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
             shown++;
             GUILayout.BeginHorizontal();
-            GUILayout.Label(counter.Name, _sLabel, GUILayout.Width(260f));
-            GUILayout.Label(counter.TotalText, _sValue, GUILayout.Width(130f));
-            GUILayout.Label(counter.PerHourText(elapsed), _sMuted);
+            GUILayout.Label(counter.Name, _sLabelClip, GUILayout.Height(18f));
+            GUILayout.Label(counter.TotalText, _sValue, GUILayout.Width(74f));
+            GUILayout.Label(counter.PerHourText(elapsed), _sMuted, GUILayout.Width(70f));
             GUILayout.EndHorizontal();
         }
 
-        if (counters.Count == 0)
-            Hint("En attente des compteurs du joueur.");
-        else if (shown == 0)
-            Hint("Aucun compteur n'a bougé depuis la remise à zéro.");
-        EndCard();
+        if (shown == 0)
+            Hint(counters.Count == 0 ? "En attente des compteurs." : "Aucun compteur n'a bougé.");
     }
 
     private static string FormatDuration(float seconds)
@@ -425,72 +469,46 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
     private void DrawRaidTab()
     {
-        BeginCard("Carte Raid");
-        bool raid = Switch(Plugin.RaidEnabled, "Entrer automatiquement en Raid");
+        BeginCard("Raid");
+        bool raid = Switch(Plugin.RaidEnabled, "Entrer automatiquement");
         if (raid != Plugin.RaidEnabled)
             Plugin.SetRaidEnabled(raid);
-        bool bossPriority = Switch(Plugin.RaidBossPriority, "Boss en priorité (Ameterasu / Behemoth)");
+        bool bossPriority = Switch(Plugin.RaidBossPriority, "Boss en priorité");
         if (bossPriority != Plugin.RaidBossPriority)
             Plugin.SetRaidBossPriority(bossPriority);
-        Hint(Plugin.RaidBossPriority
-            ? "Dès qu'un boss est visible, il est attaqué avant les mobs, même plus éloigné."
-            : "Boss ignoré : seuls les mobs (Sunburst / Léviathan) sont attaqués.");
+        DrawFullHealthSwitch();
+
         EtatJeuSnapshot raidSnapshot = GameState.ObtenirSnapshot();
         if (raidSnapshot != null && raidSnapshot.Joueur != null)
         {
             int damage = raidSnapshot.Joueur.RaidHasar;
+            int cap = RulesData.Raid.BossDamageCap;
+            GUILayout.Space(4f);
             Row("Dégâts boss", damage.ToString("N0", CultureInfo.InvariantCulture).Replace(',', '.')
-                + " / " + RulesData.Raid.BossDamageCap.ToString("N0", CultureInfo.InvariantCulture).Replace(',', '.')
-                + (damage >= RulesData.Raid.BossDamageCap ? "  (plafond atteint : boss ignorés)" : string.Empty));
+                + " / " + cap.ToString("N0", CultureInfo.InvariantCulture).Replace(',', '.'));
+            DrawBar(cap <= 0 ? 0f : damage / (float)cap, damage >= cap ? ColWarn : ColAccent, 4f);
         }
-        Hint("Le type de Raid dépend du niveau (1-10 petite, 11-15 grande) ; un médaillon est requis.");
-        Hint("Dans la Raid : navigation, combat et réparation uniquement, avec les cibles propres à la Raid.");
         EndCard();
 
-        BeginCard("Petite Raid", "Niveaux 1 à 10 - talisman du soleil");
+        BeginCard("Petite Raid");
         DrawRaidTargetRow("Sunburst", "mob");
         DrawRaidTargetRow("Ameterasu", "boss");
         EndCard();
 
-        BeginCard("Grande Raid", "Niveaux 11 à 15 - talisman de Behemoth");
+        BeginCard("Grande Raid");
         DrawRaidTargetRow("Léviathan", "mob");
         DrawRaidTargetRow("Behemoth", "boss");
         EndCard();
-        Hint("Ces quatre cibles sont retirées de l'onglet Cibles : leurs munitions se règlent ici.");
     }
 
     [HideFromIl2Cpp]
     private void DrawRaidTargetRow(string name, string role)
     {
         TargetCategory category = RaidRules.WeaponCategoryFor(name);
-        string targetKey = GetTargetKey(category, name);
-        bool dropdownOpen = string.Equals(
-            _editingAmmoTarget, targetKey, StringComparison.OrdinalIgnoreCase);
-
         GUILayout.BeginHorizontal();
-        GUILayout.Label(name + " (" + role + ")", _sLabel, GUILayout.Width(170f));
-        IReadOnlyList<AmmoDefinition> ammo = GetAmmoCatalog(category);
-        string caption = ammo.Count == 0
-            ? "Munitions indisponibles"
-            : (category == TargetCategory.Npc ? "Boulet : " : "Harpon : ")
-                + DescribeAmmo(category, ResolveAmmo(category, name)) + (dropdownOpen ? "  ^" : "  v");
-        if (GUILayout.Button(caption, dropdownOpen ? _sSegOn : _sBtn,
-                GUILayout.Width(230f), GUILayout.Height(26f)))
-        {
-            if (dropdownOpen)
-            {
-                CloseAmmoEditor();
-            }
-            else
-            {
-                _editingAmmoTarget = targetKey;
-                _ammoScroll = Vector2.zero;
-            }
-        }
+        GUILayout.Label(name + " (" + role + ")", _sLabelClip, GUILayout.Height(20f));
+        AmmoField(category, name, 138f);
         GUILayout.EndHorizontal();
-
-        if (dropdownOpen)
-            DrawAmmoDropdown(category, name);
     }
 
     private void DrawSurvivalTab()
@@ -501,18 +519,17 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         BeginCard("Coque");
         if (player == null || player.VieMax <= 0)
         {
-            Hint("En attente d'un instantané du joueur (GameState).");
+            Hint("En attente du joueur.");
         }
         else
         {
             Row("PV", player.Vie + " / " + player.VieMax
-                + "   (" + player.PourcentageVie.ToString("0", CultureInfo.InvariantCulture) + " %)");
+                + "  (" + player.PourcentageVie.ToString("0", CultureInfo.InvariantCulture) + " %)");
             DrawHpBar(player.PourcentageVie);
-            Row("État", StateText());
         }
         EndCard();
 
-        BeginCard("Réparation", "Envoie la commande de réparation tant que les PV sont sous le seuil.");
+        BeginCard("Réparation");
         bool repair = Switch(Plugin.RepairEnabled, "Réparation activée");
         if (repair != Plugin.RepairEnabled)
             Plugin.SetRepairEnabled(repair);
@@ -522,16 +539,13 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             "En activité",
             "À l'arrêt");
         Plugin.SetRepairPausesActivity(repairMode == 1);
-        Hint(Plugin.RepairPausesActivity
-            ? "À l'arrêt : toute activité est suspendue et le navire reste immobile. L'activité reprend à PV pleins."
-            : "En activité : la réparation tourne pendant la navigation, la collecte et le combat ; l'activité continue.");
 
         int repairPercent = PercentSlider("Réparer si PV <=", Plugin.RepairPercent);
         if (repairPercent != Plugin.RepairPercent)
             Plugin.SetRepairPercent(repairPercent);
         EndCard();
 
-        BeginCard("PV bas", "Abandonne le combat et continue de naviguer jusqu'à la remontée des PV.");
+        BeginCard("PV bas");
         bool flee = Switch(Plugin.FleeEnabled, "Fuite activée");
         if (flee != Plugin.FleeEnabled)
             Plugin.SetFleeEnabled(flee);
@@ -543,42 +557,33 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         bool fleeCollect = Switch(Plugin.FleeCollectEnabled, "Collecter pendant la fuite");
         if (fleeCollect != Plugin.FleeCollectEnabled)
             Plugin.SetFleeCollectEnabled(fleeCollect);
-        Hint("La fuite se termine quand les PV dépassent à la fois le seuil de fuite et celui de réparation.");
         EndCard();
     }
 
     private void DrawTargetsTab()
     {
-        IReadOnlyList<string> npcCatalog = TargetCatalog.Npcs;
-        IReadOnlyList<string> monsterCatalog = TargetCatalog.Monsters;
         RefreshDisplayCatalogs();
 
-        BeginCard("Catalogues", "Sélectionne un type de cible ; ses munitions s'appliquent à toutes les instances correspondantes.");
-        Row("Cibles", TargetCatalog.IsInitialized
-            ? npcCatalog.Count + " types de NPC, " + monsterCatalog.Count + " types de monstres"
-            : "en attente du scan réseau des prefabs");
-        Row("Munitions", AmmoCatalog.Bullets.Count + " types de boulets, "
-            + AmmoCatalog.Harpoons.Count + " types de harpons");
-        Row("Sélection", _selectedNpcs.Count + " NPC, " + _selectedMonsters.Count + " monstre(s)");
-        EndCard();
+        DrawFullHealthSwitch();
+        Divider();
 
         DrawTargetGroup(TargetCategory.Npc, "NPC");
         DrawTargetGroup(TargetCategory.Monster, "Monstres");
+    }
+
+    // Même réglage que dans Contrôle : l'option est accessible depuis Cibles et Carte Raid.
+    private void DrawFullHealthSwitch()
+    {
+        bool fullHealth = Switch(Plugin.OnlyFullHealthTargets, "Cibles à PV max seulement");
+        if (fullHealth != Plugin.OnlyFullHealthTargets)
+            Plugin.SetOnlyFullHealthTargets(fullHealth);
     }
 
     private void DrawCollectTab()
     {
         RefreshCollectibleCatalog();
 
-        BeginCard("Statut");
-        Row("Collecte", _collectEnabled ? "ACTIVÉE (onglet Contrôle)" : "DÉSACTIVÉE (onglet Contrôle)");
-        Row("Catalogue", CollectibleCatalog.IsInitialized
-            ? _displayCollectibleTypes.Count + " types"
-            : "en attente du joueur local");
-        Hint(CollectionStatusCached());
-        EndCard();
-
-        BeginCard("Types de collectibles", _enabledCollectibleTypes.Count + " activé(s)");
+        BeginCard("Types   " + _enabledCollectibleTypes.Count + " / " + _displayCollectibleTypes.Count);
         for (int i = 0; i < _displayCollectibleTypes.Count; i++)
         {
             string typeName = _displayCollectibleTypes[i];
@@ -595,7 +600,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             }
         }
         if (_displayCollectibleTypes.Count == 0)
-            Hint("Aucun type de collectible pour l'instant.");
+            Hint("Aucun type pour l'instant.");
         EndCard();
     }
 
@@ -649,16 +654,9 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     {
         RefreshEventShips(GameState.ObtenirSnapshot());
 
-        BeginCard(
-            "Navires d'événement",
-            _eventShips.Count + " présent(s), triés par carte puis par nom.");
-        Hint("Seuls les navires que le serveur envoie à ton client sont listés. Un navire "
-            + "sort de la liste quand il n'est plus présent ou à 0 PV.");
-        EndCard();
-
-        BeginCard("Liste");
+        BeginCard("Navires d'événement   " + _eventShips.Count);
         if (_eventShips.Count == 0)
-            Hint("Aucun navire d'événement pour l'instant.");
+            Hint("Aucun navire pour l'instant.");
         for (int i = 0; i < _eventShips.Count; i++)
             DrawEventShipRow(_eventShips[i]);
         EndCard();
@@ -743,13 +741,11 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     // ------------------------------------------------------------------ Composants
 
     // Section sans cadre : un petit titre, le contenu, puis un filet fin.
-    private void BeginCard(string title, string subtitle = null)
+    private void BeginCard(string title)
     {
         GUILayout.BeginVertical();
         GUILayout.Label(title.ToUpperInvariant(), _sCardTitle);
-        if (!string.IsNullOrEmpty(subtitle))
-            GUILayout.Label(subtitle, _sMuted);
-        GUILayout.Space(6f);
+        GUILayout.Space(3f);
     }
 
     private void EndCard()
@@ -760,11 +756,11 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
     private void Divider()
     {
-        GUILayout.Space(12f);
+        GUILayout.Space(7f);
         Rect line = GUILayoutUtility.GetRect(1f, 1f, GUILayout.ExpandWidth(true));
         if (Event.current.type == EventType.Repaint)
             FillRect(line, ColLine);
-        GUILayout.Space(14f);
+        GUILayout.Space(8f);
     }
 
     private void Hint(string text)
@@ -775,7 +771,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private void Row(string label, string value)
     {
         GUILayout.BeginHorizontal();
-        GUILayout.Label(label, _sMuted, GUILayout.Width(110f));
+        GUILayout.Label(label, _sMuted, GUILayout.Width(78f));
         GUILayout.Label(value, _sLabel);
         GUILayout.EndHorizontal();
     }
@@ -783,7 +779,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     // Case à cocher : petit carré arrondi, rempli en accent avec une coche quand c'est actif.
     private bool Switch(bool value, string label)
     {
-        Rect row = GUILayoutUtility.GetRect(10f, 26f, GUILayout.ExpandWidth(true));
+        Rect row = GUILayoutUtility.GetRect(10f, 20f, GUILayout.ExpandWidth(true));
         Event e = Event.current;
         bool hover = row.Contains(e.mousePosition);
         if (e.type == EventType.MouseDown && e.button == 0 && hover)
@@ -794,22 +790,22 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
         if (e.type == EventType.Repaint)
         {
-            Rect box = new Rect(row.x + 1f, row.y + (row.height - 16f) * 0.5f, 16f, 16f);
+            Rect box = new Rect(row.x + 1f, row.y + (row.height - 13f) * 0.5f, 13f, 13f);
             GUI.DrawTexture(box, value ? _texBoxOn : (hover ? _texBoxHover : _texBoxOff));
             if (value)
                 GUI.DrawTexture(box, _texCheck);
         }
 
-        GUI.Label(new Rect(row.x + 28f, row.y, row.width - 28f, row.height), label, _sLabel);
+        GUI.Label(new Rect(row.x + 21f, row.y, row.width - 21f, row.height), label, _sLabelClip);
         return value;
     }
 
     private int Segmented(int index, string first, string second)
     {
         GUILayout.BeginHorizontal();
-        if (GUILayout.Button(first, index == 0 ? _sSegOn : _sSeg, GUILayout.Height(28f)))
+        if (GUILayout.Button(first, index == 0 ? _sSegOn : _sSeg, GUILayout.Height(22f)))
             index = 0;
-        if (GUILayout.Button(second, index == 1 ? _sSegOn : _sSeg, GUILayout.Height(28f)))
+        if (GUILayout.Button(second, index == 1 ? _sSegOn : _sSeg, GUILayout.Height(22f)))
             index = 1;
         GUILayout.EndHorizontal();
         return index;
@@ -818,8 +814,8 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private int PercentSlider(string label, int value)
     {
         GUILayout.BeginHorizontal();
-        GUILayout.Label(label, _sLabel, GUILayout.Width(130f));
-        Rect r = GUILayoutUtility.GetRect(60f, 14f, GUILayout.ExpandWidth(true));
+        GUILayout.Label(label, _sLabelClip, GUILayout.Width(104f), GUILayout.Height(20f));
+        Rect r = GUILayoutUtility.GetRect(40f, 14f, GUILayout.ExpandWidth(true));
         if (Event.current.type == EventType.Repaint)
         {
             Rect track = new Rect(r.x + 7f, r.center.y - 2f, r.width - 14f, 4f);
@@ -837,7 +833,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             }
         }
         float slid = GUI.HorizontalSlider(r, value, 0f, 100f, _sSlider, _sThumb);
-        GUILayout.Label(Mathf.RoundToInt(slid) + " %", _sValue, GUILayout.Width(52f));
+        GUILayout.Label(Mathf.RoundToInt(slid) + " %", _sValue, GUILayout.Width(40f));
         GUILayout.EndHorizontal();
         return Mathf.RoundToInt(slid);
     }
@@ -847,9 +843,27 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         return GUILayout.Button(label, value ? _sRowOn : _sRow) ? !value : value;
     }
 
+    // Barre fine arrondie ; renvoie son rectangle pour y poser des repères.
+    private Rect DrawBar(float fraction, Color fill, float height)
+    {
+        Rect r = GUILayoutUtility.GetRect(10f, height, GUILayout.ExpandWidth(true));
+        if (Event.current.type == EventType.Repaint)
+        {
+            GUI.Box(r, GUIContent.none, _sTrack);
+            float clamped = Mathf.Clamp01(fraction);
+            if (clamped > 0f)
+            {
+                Color previous = GUI.color;
+                GUI.color = fill;
+                GUI.Box(new Rect(r.x, r.y, Mathf.Max(4f, r.width * clamped), r.height), GUIContent.none, _sTrackFill);
+                GUI.color = previous;
+            }
+        }
+        return r;
+    }
+
     private void DrawHpBar(float percent)
     {
-        Rect r = GUILayoutUtility.GetRect(10f, 6f, GUILayout.ExpandWidth(true));
         float clamped = Mathf.Clamp(percent, 0f, 100f);
         Color fill = ColOk;
         if (Plugin.RepairEnabled && clamped <= Plugin.RepairPercent)
@@ -857,23 +871,204 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         else if (Plugin.FleeEnabled && clamped <= Plugin.FleePercent)
             fill = ColWarn;
 
+        GUILayout.Space(2f);
+        Rect r = DrawBar(clamped / 100f, fill, 5f);
         if (Event.current.type == EventType.Repaint)
         {
-            GUI.Box(r, GUIContent.none, _sTrack);
-            if (clamped > 0f)
-            {
-                Color previous = GUI.color;
-                GUI.color = fill;
-                GUI.Box(new Rect(r.x, r.y, Mathf.Max(4f, r.width * clamped / 100f), r.height), GUIContent.none, _sTrackFill);
-                GUI.color = previous;
-            }
             if (Plugin.RepairEnabled)
-                FillRect(new Rect(r.x + r.width * Plugin.RepairPercent / 100f - 1f, r.y - 3f, 2f, r.height + 6f), ColAccent);
+                FillRect(new Rect(r.x + r.width * Plugin.RepairPercent / 100f - 1f, r.y - 2f, 2f, r.height + 4f), ColAccent);
             if (Plugin.FleeEnabled)
-                FillRect(new Rect(r.x + r.width * Plugin.FleePercent / 100f - 1f, r.y - 3f, 2f, r.height + 6f), ColWarn);
+                FillRect(new Rect(r.x + r.width * Plugin.FleePercent / 100f - 1f, r.y - 2f, 2f, r.height + 4f), ColWarn);
         }
-        GUILayout.Space(6f);
-        Hint("Repères : bleu = seuil de réparation, orange = seuil de fuite.");
+        GUILayout.Space(2f);
+    }
+
+    // ------------------------------------------------------------------ Sélecteur de munitions
+
+    // Champ fermé : nom de la munition + chevron. Un clic ouvre la liste complète, dessinée
+    // par-dessus la fenêtre (voir DrawDropdownOverlay).
+    [HideFromIl2Cpp]
+    private void AmmoField(TargetCategory category, string name, float width)
+    {
+        string key = GetTargetKey(category, name);
+        bool open = string.Equals(_editingAmmoTarget, key, StringComparison.OrdinalIgnoreCase);
+        Rect r = GUILayoutUtility.GetRect(width, 20f, GUILayout.Width(width));
+
+        IReadOnlyList<AmmoDefinition> catalog = GetAmmoCatalog(category);
+        string caption = catalog.Count == 0 ? "indisponible" : ShortAmmo(category, ResolveAmmo(category, name));
+
+        if (GUI.Button(r, caption, open ? _sSelectOpen : _sSelect) && catalog.Count > 0)
+        {
+            if (open)
+            {
+                CloseAmmoEditor();
+            }
+            else
+            {
+                _editingAmmoTarget = key;
+                _ddCategory = category;
+                _ddName = name;
+                _ddScroll = 0f;
+                _ddAnchor = GUIUtility.GUIToScreenRect(r);
+            }
+        }
+
+        if (Event.current.type == EventType.Repaint)
+        {
+            if (open)
+                _ddAnchor = GUIUtility.GUIToScreenRect(r);
+            DrawIcon(_icons[8], new Rect(r.xMax - 17f, r.center.y - 7f, 14f, 14f), ColMuted);
+        }
+    }
+
+    [HideFromIl2Cpp]
+    private bool TryGetDropdownLayout(Rect body, out Rect anchor, out Rect list, out IReadOnlyList<AmmoDefinition> items)
+    {
+        anchor = default(Rect);
+        list = default(Rect);
+        items = null;
+        if (_editingAmmoTarget == null)
+            return false;
+
+        items = GetAmmoCatalog(_ddCategory);
+        if (items.Count == 0)
+            return false;
+
+        anchor = GUIUtility.ScreenToGUIRect(_ddAnchor);
+        if (!anchor.Overlaps(body))
+            return false;
+
+        float height = Mathf.Min(DropMaxRows, items.Count) * DropItemHeight + 8f;
+        float width = Mathf.Min(Mathf.Max(anchor.width, 190f), _panel.width - 12f);
+        float x = Mathf.Clamp(anchor.xMax - width, _panel.x + 6f, _panel.xMax - width - 6f);
+        float y = anchor.yMax + 2f;
+        if (y + height > _panel.yMax - 6f)
+            y = Mathf.Max(_panel.y + 6f, anchor.y - 2f - height);
+        list = new Rect(x, y, width, height);
+        return true;
+    }
+
+    // Traité AVANT le reste de l'interface : la liste ouverte capte ses propres clics
+    // et les contrôles situés dessous ne les voient pas.
+    [HideFromIl2Cpp]
+    private void HandleDropdownInput(Rect body)
+    {
+        if (_editingAmmoTarget == null)
+            return;
+
+        Rect anchor;
+        Rect list;
+        IReadOnlyList<AmmoDefinition> items;
+        if (!TryGetDropdownLayout(body, out anchor, out list, out items))
+        {
+            CloseAmmoEditor();
+            return;
+        }
+
+        Event e = Event.current;
+        if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Escape)
+        {
+            CloseAmmoEditor();
+            e.Use();
+            return;
+        }
+
+        if (e.type == EventType.ScrollWheel && list.Contains(e.mousePosition))
+        {
+            float max = Mathf.Max(0f, items.Count * DropItemHeight + 4f - (list.height - 4f));
+            _ddScroll = Mathf.Clamp(_ddScroll + e.delta.y * DropItemHeight, 0f, max);
+            e.Use();
+            return;
+        }
+
+        if (e.type != EventType.MouseDown || e.button != 0)
+            return;
+
+        if (list.Contains(e.mousePosition))
+        {
+            int index = Mathf.FloorToInt((e.mousePosition.y - list.y - 4f + _ddScroll) / DropItemHeight);
+            if (index >= 0 && index < items.Count)
+            {
+                _ammoByTarget[GetTargetKey(_ddCategory, _ddName)] = items[index].Id;
+                ApplyConfiguration();
+                CloseAmmoEditor();
+            }
+            e.Use();
+        }
+        else if (anchor.Contains(e.mousePosition))
+        {
+            CloseAmmoEditor();
+            e.Use();
+        }
+        else
+        {
+            CloseAmmoEditor();
+        }
+    }
+
+    [HideFromIl2Cpp]
+    private void DrawDropdownOverlay(Rect body)
+    {
+        if (Event.current.type != EventType.Repaint || _editingAmmoTarget == null)
+            return;
+
+        Rect anchor;
+        Rect list;
+        IReadOnlyList<AmmoDefinition> items;
+        if (!TryGetDropdownLayout(body, out anchor, out list, out items))
+            return;
+
+        GUI.Box(list, GUIContent.none, _sPopup);
+        int? current = ResolveAmmo(_ddCategory, _ddName);
+        Vector2 mouse = Event.current.mousePosition;
+        Vector2 origin = new Vector2(list.x + 2f, list.y + 2f);
+
+        GUI.BeginGroup(new Rect(origin.x, origin.y, list.width - 4f, list.height - 4f));
+        for (int i = 0; i < items.Count; i++)
+        {
+            Rect item = new Rect(2f, 2f + i * DropItemHeight - _ddScroll, list.width - 12f, DropItemHeight);
+            if (item.yMax < 0f || item.y > list.height)
+                continue;
+
+            bool isCurrent = current.HasValue && current.Value == items[i].Id;
+            bool hover = list.Contains(mouse) && item.Contains(mouse - origin);
+            if (isCurrent)
+                GUI.Box(item, GUIContent.none, _sRowOn);
+            else if (hover)
+                GUI.Box(item, GUIContent.none, _sItemHover);
+            GUI.Label(
+                new Rect(item.x + 8f, item.y, item.width - 12f, item.height),
+                FormatAmmo(items[i]),
+                isCurrent ? _sLabelAccent : _sLabelClip);
+        }
+        GUI.EndGroup();
+
+        float content = items.Count * DropItemHeight + 4f;
+        float viewport = list.height - 4f;
+        if (content > viewport)
+        {
+            float thumbHeight = Mathf.Max(14f, viewport * viewport / content);
+            float travel = viewport - thumbHeight - 4f;
+            float t = _ddScroll / (content - viewport);
+            FillRect(new Rect(list.xMax - 6f, list.y + 4f + travel * t, 3f, thumbHeight), ColBoxEdge);
+        }
+    }
+
+    [HideFromIl2Cpp]
+    private string ShortAmmo(TargetCategory category, int? id)
+    {
+        if (!id.HasValue)
+            return "indisponible";
+
+        IReadOnlyList<AmmoDefinition> catalog = GetAmmoCatalog(category);
+        for (int i = 0; i < catalog.Count; i++)
+        {
+            if (catalog[i].Id == id.Value)
+                return string.IsNullOrWhiteSpace(catalog[i].LocalizationKey)
+                    ? catalog[i].InternalName
+                    : catalog[i].LocalizationKey;
+        }
+        return "ID " + id.Value.ToString(CultureInfo.InvariantCulture);
     }
 
     // ------------------------------------------------------------------ Styles
@@ -1046,12 +1241,99 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     {
         try
         {
-            return Font.CreateDynamicFontFromOSFont("Segoe UI", 13);
+            return Font.CreateDynamicFontFromOSFont("Segoe UI", 12);
         }
         catch (Exception)
         {
             return null;
         }
+    }
+
+    private static Vector2[] Poly(params float[] c)
+    {
+        Vector2[] points = new Vector2[c.Length / 2];
+        for (int i = 0; i < points.Length; i++)
+            points[i] = new Vector2(c[i * 2], c[i * 2 + 1]);
+        return points;
+    }
+
+    // Icônes au trait (16 px, blanches : la couleur vient de GUI.color), dessinées en code.
+    private static Texture2D BuildIcon(int index)
+    {
+        string key = "icon|" + index;
+        Texture2D cached;
+        if (RoundCache.TryGetValue(key, out cached) && cached != null)
+            return cached;
+
+        List<Vector2[]> lines = new List<Vector2[]>();
+        List<Vector3> rings = new List<Vector3>();
+        switch (index)
+        {
+            case 0: // réglages
+                lines.Add(Poly(2, 4, 8, 4)); lines.Add(Poly(12, 4, 14, 4));
+                lines.Add(Poly(2, 8, 3, 8)); lines.Add(Poly(7, 8, 14, 8));
+                lines.Add(Poly(2, 12, 9, 12)); lines.Add(Poly(13, 12, 14, 12));
+                rings.Add(new Vector3(10, 4, 1.8f)); rings.Add(new Vector3(5, 8, 1.8f)); rings.Add(new Vector3(11, 12, 1.8f));
+                break;
+            case 1: // bouclier
+                lines.Add(Poly(8, 2, 13, 4, 13, 8, 8, 14, 3, 8, 3, 4, 8, 2));
+                break;
+            case 2: // cible
+                rings.Add(new Vector3(8, 8, 5.5f)); rings.Add(new Vector3(8, 8, 2f));
+                lines.Add(Poly(8, 1, 8, 3.5f)); lines.Add(Poly(8, 12.5f, 8, 15));
+                lines.Add(Poly(1, 8, 3.5f, 8)); lines.Add(Poly(12.5f, 8, 15, 8));
+                break;
+            case 3: // sac
+                lines.Add(Poly(3, 6, 13, 6, 12, 14, 4, 14, 3, 6));
+                lines.Add(Poly(6, 6, 6, 4.2f, 7.2f, 3, 8.8f, 3, 10, 4.2f, 10, 6));
+                break;
+            case 4: // carte
+                lines.Add(Poly(2, 4, 6, 3, 10, 5, 14, 4, 14, 12, 10, 13, 6, 11, 2, 12, 2, 4));
+                lines.Add(Poly(6, 3, 6, 11)); lines.Add(Poly(10, 5, 10, 13));
+                break;
+            case 5: // barres
+                lines.Add(Poly(4, 13, 4, 8)); lines.Add(Poly(8, 13, 8, 3)); lines.Add(Poly(12, 13, 12, 6));
+                break;
+            case 6: // pouls
+                lines.Add(Poly(1, 8, 5, 8, 7, 3, 9, 13, 11, 8, 15, 8));
+                break;
+            case 7: // horloge
+                rings.Add(new Vector3(8, 8, 6f));
+                lines.Add(Poly(8, 4.5f, 8, 8, 10.5f, 9.5f));
+                break;
+            default: // chevron vers le bas
+                lines.Add(Poly(4.5f, 6, 8, 9.5f, 11.5f, 6));
+                break;
+        }
+
+        const int size = 16;
+        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        texture.filterMode = FilterMode.Bilinear;
+        texture.wrapMode = TextureWrapMode.Clamp;
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                Vector2 p = new Vector2(x + 0.5f, size - (y + 0.5f));
+                float d = 99f;
+                for (int l = 0; l < lines.Count; l++)
+                {
+                    Vector2[] line = lines[l];
+                    for (int k = 0; k + 1 < line.Length; k++)
+                        d = Mathf.Min(d, DistanceToSegment(p, line[k], line[k + 1]));
+                }
+                for (int r = 0; r < rings.Count; r++)
+                {
+                    Vector3 ring = rings[r];
+                    d = Mathf.Min(d, Mathf.Abs((p - new Vector2(ring.x, ring.y)).magnitude - ring.z));
+                }
+                texture.SetPixel(x, y, new Color(1f, 1f, 1f, Mathf.Clamp01(1.25f - d)));
+            }
+        }
+        texture.Apply();
+        texture.hideFlags = HideFlags.HideAndDontSave;
+        RoundCache[key] = texture;
+        return texture;
     }
 
     private void EnsureStyles()
@@ -1087,34 +1369,45 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         }
 
         _texDot = RoundTexture(10, 5, Color.white, Color.white, 0f);
-        _texBoxOff = RoundTexture(16, 4, ColBox, ColBoxEdge, 1f);
-        _texBoxHover = RoundTexture(16, 4, ColBox, ColMuted, 1f);
-        _texBoxOn = RoundTexture(16, 4, ColAccent, ColAccent, 1f);
-        _texCheck = CheckTexture(16, new Color(0.02f, 0.06f, 0.12f, 1f));
+        _texBoxOff = RoundTexture(13, 3, ColBox, ColBoxEdge, 1f);
+        _texBoxHover = RoundTexture(13, 3, ColBox, ColMuted, 1f);
+        _texBoxOn = RoundTexture(13, 3, ColAccent, ColAccent, 1f);
+        _texCheck = CheckTexture(13, new Color(0.02f, 0.06f, 0.12f, 1f));
+        _icons.Clear();
+        for (int i = 0; i < 9; i++)
+            _icons.Add(BuildIcon(i));
 
         _sWindow = CloneStyle(skin.box);
-        RoundPaint(_sWindow, ColBg, ColBg, ColText, ColEdge, ColEdge, 10);
+        RoundPaint(_sWindow, ColBg, ColBg, ColText, ColEdge, ColEdge, 8);
         _sWindow.padding = new RectOffset(0, 0, 0, 0);
         _sWindow.margin = new RectOffset(0, 0, 0, 0);
 
         _sLabel = CloneStyle(skin.label);
-        _sLabel.fontSize = 13;
+        _sLabel.fontSize = 11;
         _sLabel.alignment = TextAnchor.MiddleLeft;
         _sLabel.wordWrap = true;
+        _sLabel.margin = new RectOffset(0, 0, 1, 1);
+        _sLabel.padding = new RectOffset(0, 0, 0, 0);
         _sLabel.normal.textColor = ColText;
 
+        _sLabelClip = CloneStyle(_sLabel);
+        _sLabelClip.wordWrap = false;
+        _sLabelClip.clipping = TextClipping.Clip;
+
+        _sLabelAccent = CloneStyle(_sLabelClip);
+        _sLabelAccent.normal.textColor = ColAccent;
+
         _sTitle = CloneStyle(_sLabel);
-        _sTitle.fontSize = 13;
+        _sTitle.fontSize = 12;
         _sTitle.fontStyle = FontStyle.Bold;
         _sTitle.wordWrap = false;
 
         _sCardTitle = CloneStyle(_sLabel);
-        _sCardTitle.fontSize = 10;
+        _sCardTitle.fontSize = 9;
         _sCardTitle.fontStyle = FontStyle.Bold;
         _sCardTitle.normal.textColor = ColFaint;
 
         _sMuted = CloneStyle(_sLabel);
-        _sMuted.fontSize = 12;
         _sMuted.normal.textColor = ColMuted;
 
         _sValue = CloneStyle(_sLabel);
@@ -1122,46 +1415,68 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         _sValue.fontStyle = FontStyle.Bold;
 
         _sTab = CloneStyle(skin.button);
-        RoundPaint(_sTab, ColClear, new Color(1f, 1f, 1f, 0.05f), ColMuted, ColClear, ColClear, 6);
-        _sTab.fontSize = 13;
-        _sTab.alignment = TextAnchor.MiddleLeft;
-        _sTab.padding = new RectOffset(14, 6, 2, 2);
+        RoundPaint(_sTab, ColClear, new Color(1f, 1f, 1f, 0.06f), ColMuted, ColClear, ColClear, 5);
+        _sTab.margin = new RectOffset(0, 0, 0, 0);
 
         _sTabOn = CloneStyle(_sTab);
-        RoundPaint(_sTabOn, ColSel, ColSel, new Color(0.86f, 0.93f, 1f, 1f), ColSelEdge, ColSelEdge, 6);
+        RoundPaint(_sTabOn, ColSel, ColSel, ColText, ColSelEdge, ColSelEdge, 5);
 
         _sBtn = CloneStyle(skin.button);
-        RoundPaint(_sBtn, ColField, ColFieldHover, ColText, ColLine, ColBoxEdge, 6);
-        _sBtn.fontSize = 12;
-        _sBtn.padding = new RectOffset(12, 12, 4, 4);
+        RoundPaint(_sBtn, ColField, ColFieldHover, ColText, ColLine, ColBoxEdge, 5);
+        _sBtn.fontSize = 11;
+        _sBtn.margin = new RectOffset(2, 2, 2, 2);
+        _sBtn.padding = new RectOffset(8, 8, 2, 2);
 
         _sBtnPrimary = CloneStyle(_sBtn);
-        RoundPaint(_sBtnPrimary, ColAccent, new Color(0.35f, 0.69f, 1f, 1f), new Color(0.02f, 0.06f, 0.12f, 1f), ColAccent, ColAccent, 6);
+        RoundPaint(_sBtnPrimary, ColAccent, new Color(0.35f, 0.69f, 1f, 1f), new Color(0.02f, 0.06f, 0.12f, 1f), ColAccent, ColAccent, 5);
         _sBtnPrimary.fontStyle = FontStyle.Bold;
 
         _sBtnDanger = CloneStyle(_sBtn);
-        RoundPaint(_sBtnDanger, ColClear, new Color(0.94f, 0.36f, 0.36f, 0.14f), ColDanger, ColDanger, ColDanger, 6);
+        RoundPaint(_sBtnDanger, ColClear, new Color(0.94f, 0.36f, 0.36f, 0.14f), ColDanger, ColDanger, ColDanger, 5);
         _sBtnDanger.fontStyle = FontStyle.Bold;
 
         _sSeg = CloneStyle(_sBtn);
-        RoundPaint(_sSeg, ColBox, ColFieldHover, ColMuted, ColLine, ColBoxEdge, 6);
+        RoundPaint(_sSeg, ColBox, ColFieldHover, ColMuted, ColLine, ColBoxEdge, 5);
 
         _sSegOn = CloneStyle(_sBtn);
-        RoundPaint(_sSegOn, ColSel, ColSel, new Color(0.86f, 0.93f, 1f, 1f), ColSelEdge, ColSelEdge, 6);
+        RoundPaint(_sSegOn, ColSel, ColSel, ColText, ColSelEdge, ColSelEdge, 5);
 
         _sFold = CloneStyle(_sBtn);
-        RoundPaint(_sFold, ColClear, ColField, ColText, ColClear, ColClear, 6);
+        RoundPaint(_sFold, ColClear, ColField, ColText, ColClear, ColClear, 5);
         _sFold.alignment = TextAnchor.MiddleLeft;
         _sFold.fontStyle = FontStyle.Bold;
-        _sFold.padding = new RectOffset(10, 10, 4, 4);
+        _sFold.padding = new RectOffset(6, 6, 2, 2);
 
         _sRow = CloneStyle(_sBtn);
-        RoundPaint(_sRow, ColClear, ColField, ColMuted, ColClear, ColClear, 6);
+        RoundPaint(_sRow, ColClear, ColField, ColMuted, ColClear, ColClear, 5);
         _sRow.alignment = TextAnchor.MiddleLeft;
-        _sRow.padding = new RectOffset(12, 8, 4, 4);
+        _sRow.padding = new RectOffset(8, 6, 2, 2);
 
         _sRowOn = CloneStyle(_sRow);
-        RoundPaint(_sRowOn, ColSel, ColSel, ColText, ColSelEdge, ColSelEdge, 6);
+        RoundPaint(_sRowOn, ColSel, ColSel, ColText, ColSelEdge, ColSelEdge, 5);
+
+        _sItemHover = CloneStyle(_sRow);
+        RoundPaint(_sItemHover, ColFieldHover, ColFieldHover, ColText, ColFieldHover, ColFieldHover, 5);
+
+        _sSelect = CloneStyle(_sBtn);
+        RoundPaint(_sSelect, ColField, ColFieldHover, ColText, ColLine, ColBoxEdge, 5);
+        _sSelect.alignment = TextAnchor.MiddleLeft;
+        _sSelect.clipping = TextClipping.Clip;
+        _sSelect.wordWrap = false;
+        _sSelect.padding = new RectOffset(8, 20, 2, 2);
+
+        _sSelectOpen = CloneStyle(_sSelect);
+        RoundPaint(_sSelectOpen, ColField, ColField, ColText, ColAccent, ColAccent, 5);
+
+        _sPopup = CloneStyle(skin.box);
+        RoundPaint(_sPopup, new Color(0.075f, 0.098f, 0.133f, 1f), new Color(0.075f, 0.098f, 0.133f, 1f), ColText, ColBoxEdge, ColBoxEdge, 6);
+        _sPopup.padding = new RectOffset(0, 0, 0, 0);
+        _sPopup.margin = new RectOffset(0, 0, 0, 0);
+
+        _sTip = CloneStyle(_sPopup);
+        _sTip.alignment = TextAnchor.MiddleCenter;
+        _sTip.fontSize = 10;
+        _sTip.wordWrap = false;
 
         // Curseur : la piste est dessinée à la main (voir PercentSlider), le style est transparent.
         _sSlider = CloneStyle(skin.horizontalSlider);
@@ -1171,14 +1486,15 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         _sSlider.focused.background = _sSlider.normal.background;
         _sSlider.fixedHeight = 14f;
         _sSlider.border = new RectOffset(0, 0, 0, 0);
+        _sSlider.margin = new RectOffset(0, 0, 0, 0);
 
         _sThumb = CloneStyle(skin.horizontalSliderThumb);
-        _sThumb.normal.background = RoundTexture(14, 7, ColText, ColText, 0f);
-        _sThumb.hover.background = RoundTexture(14, 7, new Color(0.62f, 0.80f, 1f, 1f), new Color(0.62f, 0.80f, 1f, 1f), 0f);
+        _sThumb.normal.background = RoundTexture(12, 6, ColText, ColText, 0f);
+        _sThumb.hover.background = RoundTexture(12, 6, new Color(0.62f, 0.80f, 1f, 1f), new Color(0.62f, 0.80f, 1f, 1f), 0f);
         _sThumb.active.background = _sThumb.hover.background;
         _sThumb.focused.background = _sThumb.normal.background;
-        _sThumb.fixedWidth = 14f;
-        _sThumb.fixedHeight = 14f;
+        _sThumb.fixedWidth = 12f;
+        _sThumb.fixedHeight = 12f;
         _sThumb.border = new RectOffset(0, 0, 0, 0);
 
         _sTrack = CloneStyle(skin.box);
@@ -1335,8 +1651,8 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         int selectedCount = (isMonster ? _selectedMonsters : _selectedNpcs).Count;
 
         GUILayout.BeginVertical();
-        string caption = label + "     " + selectedCount + " / " + catalog.Count + (open ? "     -" : "     +");
-        if (GUILayout.Button(caption, _sFold, GUILayout.Height(28f)))
+        string caption = (open ? "-   " : "+   ") + label + "   " + selectedCount + " / " + catalog.Count;
+        if (GUILayout.Button(caption, _sFold, GUILayout.Height(22f)))
         {
             open = !open;
             if (isMonster)
@@ -1356,10 +1672,10 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     [HideFromIl2Cpp]
     private void DrawTargetRows(TargetCategory category, List<string> catalog)
     {
-        GUILayout.Space(4f);
+        GUILayout.Space(3f);
         if (!TargetCatalog.IsInitialized)
         {
-            Hint("En attente du catalogue de cibles du jeu.");
+            Hint("En attente du catalogue.");
             return;
         }
 
@@ -1381,37 +1697,12 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             }
 
             if (isSelected || category == TargetCategory.Npc)
-            {
-                IReadOnlyList<AmmoDefinition> ammo = GetAmmoCatalog(category);
-                int? id = ResolveAmmo(category, name);
-                bool dropdownOpen = string.Equals(
-                    _editingAmmoTarget, targetKey, StringComparison.OrdinalIgnoreCase);
-                string caption = ammo.Count == 0
-                    ? (category == TargetCategory.Npc ? "Boulet indisponible" : "Munitions indisponibles")
-                    : (category == TargetCategory.Npc ? "Boulet : " : "Harpon : ")
-                        + DescribeAmmo(category, id) + (dropdownOpen ? "  ^" : "  v");
-                if (GUILayout.Button(caption, dropdownOpen ? _sSegOn : _sBtn,
-                        GUILayout.Width(230f), GUILayout.Height(26f)))
-                {
-                    if (dropdownOpen)
-                    {
-                        CloseAmmoEditor();
-                    }
-                    else
-                    {
-                        _editingAmmoTarget = targetKey;
-                        _ammoScroll = Vector2.zero;
-                    }
-                }
-            }
+                AmmoField(category, name, 124f);
             GUILayout.EndHorizontal();
-
-            if (string.Equals(_editingAmmoTarget, targetKey, StringComparison.OrdinalIgnoreCase))
-                DrawAmmoDropdown(category, name);
         }
 
         if (catalog.Count == 0)
-            Hint("Aucun type dans ce catalogue.");
+            Hint("Aucun type.");
     }
 
     private void RefreshDisplayCatalogs()
@@ -1453,38 +1744,6 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             targets.Add(name);
         else
             targets.Remove(name);
-    }
-
-    [HideFromIl2Cpp]
-    private void DrawAmmoDropdown(TargetCategory category, string name)
-    {
-        IReadOnlyList<AmmoDefinition> catalog = GetAmmoCatalog(category);
-        if (catalog.Count == 0)
-        {
-            Hint("En attente du catalogue de munitions du jeu.");
-            return;
-        }
-
-        GUILayout.Label(
-            (category == TargetCategory.Npc ? "Boulets pour " : "Harpons pour ") + name
-            + " (appliqué à toutes les instances)",
-            _sMuted);
-        float height = Mathf.Min(180f, catalog.Count * 30f + 4f);
-        _ammoScroll = GUILayout.BeginScrollView(_ammoScroll, GUILayout.Height(height));
-        int? currentId = ResolveAmmo(category, name);
-        for (int i = 0; i < catalog.Count; i++)
-        {
-            AmmoDefinition ammo = catalog[i];
-            bool isCurrent = currentId.HasValue && currentId.Value == ammo.Id;
-            if (RowToggle(isCurrent, FormatAmmo(ammo)) && !isCurrent)
-            {
-                _ammoByTarget[GetTargetKey(category, name)] = ammo.Id;
-                ApplyConfiguration();
-                CloseAmmoEditor();
-            }
-        }
-        GUILayout.EndScrollView();
-        GUILayout.Space(6f);
     }
 
     private void ApplyConfiguration()
