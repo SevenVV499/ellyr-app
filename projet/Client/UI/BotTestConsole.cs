@@ -38,14 +38,14 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private static readonly Color ColFieldHover = new Color(0.141f, 0.176f, 0.231f, 1f);
     private static readonly Color ColBox = new Color(0.043f, 0.055f, 0.075f, 1f);
     private static readonly Color ColBoxEdge = new Color(0.30f, 0.35f, 0.42f, 1f);
-    private static readonly Color ColAccent = new Color(0.239f, 0.608f, 1f, 1f);
+    private static Color ColAccent = new Color(0.239f, 0.608f, 1f, 1f);
     private static readonly Color ColAccentDim = new Color(0.090f, 0.227f, 0.388f, 1f);
     private static readonly Color ColEdge = new Color(0.157f, 0.196f, 0.263f, 1f);
     private static readonly Color ColFaint = new Color(0.30f, 0.37f, 0.46f, 1f);
-    private static readonly Color ColSel = new Color(0.239f, 0.608f, 1f, 0.16f);
-    private static readonly Color ColSelEdge = new Color(0.239f, 0.608f, 1f, 0.45f);
+    private static Color ColSel = new Color(0.239f, 0.608f, 1f, 0.16f);
+    private static Color ColSelEdge = new Color(0.239f, 0.608f, 1f, 0.45f);
     private static readonly Color ColClear = new Color(0f, 0f, 0f, 0f);
-    private static readonly Color ColNavOn = new Color(0.60f, 0.80f, 1f, 1f);
+    private static Color ColNavOn = new Color(0.60f, 0.80f, 1f, 1f);
     private static readonly Color ColOk = new Color(0.24f, 0.86f, 0.59f, 1f);
     private static readonly Color ColWarn = new Color(0.96f, 0.65f, 0.14f, 1f);
     private static readonly Color ColDanger = new Color(0.95f, 0.37f, 0.36f, 1f);
@@ -130,6 +130,35 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private Texture2D _texPlay;
     private Texture2D _texStop;
     private Texture2D _texLogo;
+    private Texture2D _texPlayBg;
+    private Texture2D _texPlayGlow;
+    private GUIStyle _sGhost;
+    private bool _skinReady;
+    private bool _cfgOpen;
+    private string _themeId = "logo";
+    private string _appliedThemeKey;
+    private Color _accentA1 = new Color(0.69f, 0.29f, 1f, 1f);
+    private Color _accentA2 = new Color(0.10f, 0.88f, 1f, 1f);
+    private Color _bandA = new Color(0.69f, 0.29f, 1f, 1f);
+    private Color _bandB = new Color(0.10f, 0.88f, 1f, 1f);
+
+    private sealed class ThemeDef
+    {
+        public string Id;
+        public string NameKey;
+        public Color A1;
+        public Color A2;
+        public Color Flat;
+        public bool Animated;
+    }
+
+    private static readonly ThemeDef[] Themes =
+    {
+        new ThemeDef { Id = "logo", NameKey = "Logo", A1 = new Color(0.69f, 0.29f, 1f, 1f), A2 = new Color(0.10f, 0.88f, 1f, 1f), Flat = new Color(0.56f, 0.49f, 1f, 1f) },
+        new ThemeDef { Id = "rouge", NameKey = "Rouge", A1 = new Color(1f, 0.23f, 0.31f, 1f), A2 = new Color(1f, 0.42f, 0.24f, 1f), Flat = new Color(1f, 0.30f, 0.34f, 1f) },
+        new ThemeDef { Id = "rgb", NameKey = "RGB animé", Animated = true },
+        new ThemeDef { Id = "blanc", NameKey = "Blanc", A1 = new Color(0.90f, 0.91f, 0.93f, 1f), A2 = Color.white, Flat = new Color(0.90f, 0.91f, 0.93f, 1f) },
+    };
     private readonly List<Texture2D> _icons = new List<Texture2D>();
     private TargetCategory _ddCategory;
     private string _ddName;
@@ -141,8 +170,19 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     {
     }
 
+    private static string T(string french)
+    {
+        return ConsoleText.T(french);
+    }
+
     private void Awake()
     {
+        string language = Plugin.Language;
+        ConsoleText.SetLanguage(
+            string.IsNullOrEmpty(language) || string.Equals(language, "auto", StringComparison.OrdinalIgnoreCase)
+                ? ConsoleText.DetectSystemLanguage()
+                : language);
+        _themeId = FindTheme(Plugin.ThemeId).Id;
         _allowPnj = BotTestConsoleCatalog.CreatePnjFilter(IsPnjAllowed);
         _collectEnabled = Plugin.CollectEnabled;
         RefreshCollectibleSettings();
@@ -166,6 +206,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             return;
         }
 
+        UpdateTheme();
         EnsureStyles();
 
         // La console utilise sa propre copie du skin : les autres interfaces du jeu ne sont pas touchées.
@@ -194,6 +235,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             || (current != null && _panel.Contains(current.mousePosition));
 
         Rect body = new Rect(_panel.x + 10f, _panel.y + BodyTop, _panel.width - 20f, _panel.height - BodyTop - 8f);
+        HandleCfgInput();
         HandleDropdownInput(body);
 
         GUI.Box(_panel, GUIContent.none, _sWindow);
@@ -202,7 +244,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         DrawNav();
         GUI.Label(
             new Rect(_panel.x + 12f, _panel.y + HeaderHeight + NavHeight + 4f, _panel.width - 24f, TitleHeight),
-            TabLabels[_activeTab],
+            T(TabLabels[_activeTab]),
             _sTitle);
 
         GUILayout.BeginArea(body);
@@ -222,6 +264,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
         DrawDropdownOverlay(body);
         DrawNavTooltip();
+        DrawCfgOverlay();
     }
 
     private void HandleDrag()
@@ -247,22 +290,253 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         }
     }
 
+    [HideFromIl2Cpp]
+    private static ThemeDef FindTheme(string id)
+    {
+        for (int i = 0; i < Themes.Length; i++)
+        {
+            if (string.Equals(Themes[i].Id, id, StringComparison.OrdinalIgnoreCase))
+                return Themes[i];
+        }
+        return Themes[0];
+    }
+
+    // Applique le thème courant. Le thème animé change de teinte par paliers (la bande, elle,
+    // glisse en continu) : les styles ne sont reconstruits qu'à chaque palier.
+    [HideFromIl2Cpp]
+    private void UpdateTheme()
+    {
+        ThemeDef theme = FindTheme(_themeId);
+        Color a1 = theme.A1;
+        Color a2 = theme.A2;
+        Color flat = theme.Flat;
+        string key = theme.Id;
+        if (theme.Animated)
+        {
+            float hue = (Time.unscaledTime * 0.055f) % 1f;
+            _bandA = Color.HSVToRGB(hue, 0.72f, 1f);
+            _bandB = Color.HSVToRGB((hue + 0.2f) % 1f, 0.72f, 1f);
+            float step = Mathf.Floor(hue * 90f) / 90f;
+            a1 = Color.HSVToRGB(step, 0.72f, 1f);
+            a2 = Color.HSVToRGB((step + 0.2f) % 1f, 0.72f, 1f);
+            flat = a1;
+            key = "rgb|" + step.ToString("0.000", CultureInfo.InvariantCulture);
+        }
+        else
+        {
+            _bandA = a1;
+            _bandB = a2;
+        }
+
+        if (key == _appliedThemeKey)
+            return;
+
+        _appliedThemeKey = key;
+        _accentA1 = a1;
+        _accentA2 = a2;
+        ColAccent = flat;
+        ColSel = new Color(flat.r, flat.g, flat.b, 0.16f);
+        ColSelEdge = new Color(flat.r, flat.g, flat.b, 0.45f);
+        ColNavOn = Color.Lerp(flat, Color.white, 0.45f);
+        _stylesReady = false;
+    }
+
+    private void DrawBand()
+    {
+        if (Event.current.type != EventType.Repaint)
+            return;
+
+        const int segments = 56;
+        float x0 = _panel.x + 8f;
+        float width = (_panel.width - 16f) / segments;
+        Color previous = GUI.color;
+        for (int i = 0; i < segments; i++)
+        {
+            GUI.color = Color.Lerp(_bandA, _bandB, i / (float)(segments - 1));
+            GUI.DrawTexture(new Rect(x0 + i * width, _panel.y + 1f, width + 0.5f, 3f), Texture2D.whiteTexture);
+        }
+        GUI.color = previous;
+    }
+
+    private Rect GearRect()
+    {
+        return new Rect(_panel.xMax - 46f - 30f, _panel.y + 5f, 24f, 20f);
+    }
+
     private void DrawHeader()
     {
+        DrawBand();
         if (_texLogo != null && Event.current.type == EventType.Repaint)
             GUI.DrawTexture(new Rect(_panel.x + 10f, _panel.y + 6f, 18f, 18f), _texLogo);
         GUI.Label(new Rect(_panel.x + 34f, _panel.y + 5f, 50f, 20f), "ELLYR", _sTitle);
         DrawDot(new Rect(_panel.x + 82f, _panel.y + 11f, 8f, 8f), StateColor());
 
         bool running = CopperWire.AutomationEnabled;
+        bool repaint = Event.current.type == EventType.Repaint;
         Rect play = new Rect(_panel.xMax - 46f, _panel.y + 5f, 34f, 20f);
-        if (GUI.Button(play, GUIContent.none, running ? _sBtnDanger : _sBtnPrimary))
+        bool clicked;
+        if (running)
+        {
+            clicked = GUI.Button(play, GUIContent.none, _sBtnDanger);
+        }
+        else
+        {
+            clicked = GUI.Button(play, GUIContent.none, _sGhost);
+            if (repaint)
+            {
+                GUI.DrawTexture(play, _texPlayBg);
+                if (play.Contains(Event.current.mousePosition))
+                {
+                    Color previous = GUI.color;
+                    GUI.color = new Color(1f, 1f, 1f, 0.18f);
+                    GUI.DrawTexture(play, _texPlayGlow);
+                    GUI.color = previous;
+                }
+            }
+        }
+        if (clicked)
             CopperWire.SetAutomationEnabled(!running);
-        if (Event.current.type == EventType.Repaint)
+        if (repaint)
             DrawIcon(
                 running ? _texStop : _texPlay,
                 new Rect(play.center.x - 5f, play.center.y - 5f, 10f, 10f),
                 running ? ColDanger : new Color(0.02f, 0.06f, 0.12f, 1f));
+
+        Rect gear = GearRect();
+        if (GUI.Button(gear, GUIContent.none, _cfgOpen ? _sTabOn : _sTab))
+        {
+            _cfgOpen = !_cfgOpen;
+            CloseAmmoEditor();
+        }
+        if (repaint)
+            DrawIcon(_icons[8], new Rect(gear.center.x - 7f, gear.center.y - 7f, 14f, 14f), _cfgOpen ? ColNavOn : ColMuted);
+    }
+
+    // ------------------------------------------------------------------ Volet des réglages
+
+    private const float CfgWidth = 196f;
+    private const float CfgRow = 22f;
+
+    private Rect CfgRect()
+    {
+        float height = 8f + 16f + Themes.Length * CfgRow + 14f + 16f + (ConsoleText.Codes.Length / 2) * CfgRow + 10f;
+        return new Rect(_panel.xMax - 8f - CfgWidth, _panel.y + 36f, CfgWidth, height);
+    }
+
+    private static Rect CfgThemeRow(Rect cfg, int index)
+    {
+        return new Rect(cfg.x + 8f, cfg.y + 8f + 16f + index * CfgRow, cfg.width - 16f, CfgRow);
+    }
+
+    private static Rect CfgLanguageRow(Rect cfg, int index)
+    {
+        float top = cfg.y + 8f + 16f + Themes.Length * CfgRow + 14f + 16f;
+        float width = (cfg.width - 16f) * 0.5f;
+        return new Rect(cfg.x + 8f + (index % 2) * width, top + (index / 2) * CfgRow, width, CfgRow);
+    }
+
+    // Traité avant le reste de l'interface : un clic sur le volet ne traverse pas jusqu'aux contrôles dessous.
+    [HideFromIl2Cpp]
+    private void HandleCfgInput()
+    {
+        if (!_cfgOpen)
+            return;
+
+        Event e = Event.current;
+        if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Escape)
+        {
+            _cfgOpen = false;
+            e.Use();
+            return;
+        }
+
+        if (e.type != EventType.MouseDown || e.button != 0)
+            return;
+
+        Rect cfg = CfgRect();
+        if (cfg.Contains(e.mousePosition))
+        {
+            for (int i = 0; i < Themes.Length; i++)
+            {
+                if (CfgThemeRow(cfg, i).Contains(e.mousePosition))
+                {
+                    _themeId = Themes[i].Id;
+                    Plugin.SetThemeId(_themeId);
+                }
+            }
+            for (int i = 0; i < ConsoleText.Codes.Length; i++)
+            {
+                if (CfgLanguageRow(cfg, i).Contains(e.mousePosition))
+                {
+                    ConsoleText.SetLanguage(ConsoleText.Codes[i]);
+                    Plugin.SetLanguage(ConsoleText.Codes[i]);
+                }
+            }
+            e.Use();
+        }
+        else if (GearRect().Contains(e.mousePosition))
+        {
+            _cfgOpen = false;
+            e.Use();
+        }
+        else
+        {
+            _cfgOpen = false;
+        }
+    }
+
+    [HideFromIl2Cpp]
+    private void DrawCfgOverlay()
+    {
+        if (!_cfgOpen || Event.current.type != EventType.Repaint)
+            return;
+
+        Rect cfg = CfgRect();
+        Vector2 mouse = Event.current.mousePosition;
+        GUI.Box(cfg, GUIContent.none, _sPopup);
+
+        GUI.Label(new Rect(cfg.x + 10f, cfg.y + 8f, cfg.width - 20f, 16f), T("Thème").ToUpperInvariant(), _sCardTitle);
+        for (int i = 0; i < Themes.Length; i++)
+        {
+            Rect row = CfgThemeRow(cfg, i);
+            bool selected = string.Equals(Themes[i].Id, _themeId, StringComparison.OrdinalIgnoreCase);
+            if (selected)
+                GUI.Box(row, GUIContent.none, _sRowOn);
+            else if (row.Contains(mouse))
+                GUI.Box(row, GUIContent.none, _sItemHover);
+            DrawSwatch(new Rect(row.x + 8f, row.y + 7f, 20f, 8f), Themes[i]);
+            GUI.Label(new Rect(row.x + 36f, row.y, row.width - 40f, row.height), T(Themes[i].NameKey), _sLabelClip);
+        }
+
+        float titleY = cfg.y + 8f + 16f + Themes.Length * CfgRow + 14f;
+        FillRect(new Rect(cfg.x + 10f, titleY - 8f, cfg.width - 20f, 1f), ColLine);
+        GUI.Label(new Rect(cfg.x + 10f, titleY - 2f, cfg.width - 20f, 16f), T("Langue").ToUpperInvariant(), _sCardTitle);
+        for (int i = 0; i < ConsoleText.Codes.Length; i++)
+        {
+            Rect row = CfgLanguageRow(cfg, i);
+            bool selected = string.Equals(ConsoleText.Codes[i], ConsoleText.Language, StringComparison.OrdinalIgnoreCase);
+            if (selected)
+                GUI.Box(row, GUIContent.none, _sRowOn);
+            else if (row.Contains(mouse))
+                GUI.Box(row, GUIContent.none, _sItemHover);
+            GUI.Label(new Rect(row.x + 8f, row.y, row.width - 10f, row.height), ConsoleText.Names[i], _sLabelClip);
+        }
+    }
+
+    // Pastille de couleur du thème : dégradé en dix tranches (arc-en-ciel pour le thème animé).
+    [HideFromIl2Cpp]
+    private static void DrawSwatch(Rect rect, ThemeDef theme)
+    {
+        const int slices = 10;
+        float width = rect.width / slices;
+        Color previous = GUI.color;
+        for (int i = 0; i < slices; i++)
+        {
+            float t = i / (float)(slices - 1);
+            GUI.color = theme.Animated ? Color.HSVToRGB(t * 0.8f, 0.72f, 1f) : Color.Lerp(theme.A1, theme.A2, t);
+            GUI.DrawTexture(new Rect(rect.x + i * width, rect.y, width + 0.4f, rect.height), Texture2D.whiteTexture);
+        }
+        GUI.color = previous;
     }
 
     private void DrawDot(Rect rect, Color color)
@@ -366,10 +640,10 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
     private void DrawNavTooltip()
     {
-        if (_hoverTab < 0 || Event.current.type != EventType.Repaint)
+        if (_hoverTab < 0 || _cfgOpen || Event.current.type != EventType.Repaint)
             return;
 
-        string text = TabLabels[_hoverTab];
+        string text = T(TabLabels[_hoverTab]);
         float width = text.Length * 6.4f + 16f;
         float cell = (_panel.width - 16f) / TabLabels.Length;
         float centre = _panel.x + 8f + (_hoverTab + 0.5f) * cell;
@@ -401,10 +675,15 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
     // ------------------------------------------------------------------ Onglets
 
+    private static float TextWidth(GUIStyle style, string text)
+    {
+        return style.CalcSize(new GUIContent(text)).x;
+    }
+
     private void DrawControlTab()
     {
-        BeginCard("Activités");
-        bool collect = Switch(_collectEnabled, "Collecte");
+        BeginCard(T("Activités"));
+        bool collect = Switch(_collectEnabled, T("Collecte"));
         if (collect != _collectEnabled)
         {
             _collectEnabled = collect;
@@ -412,7 +691,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             ApplyConfiguration();
         }
 
-        bool combat = Switch(_combatEnabled, "Combat");
+        bool combat = Switch(_combatEnabled, T("Combat"));
         if (combat != _combatEnabled)
         {
             _combatEnabled = combat;
@@ -424,25 +703,27 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         {
             bool combatFirst = _priority == CombatCollectPriority.Combat;
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Priorité", _sMuted, GUILayout.Width(50f), GUILayout.Height(22f));
-            GUILayout.Label("Collecte", combatFirst ? _sMuted : _sLabelClip, GUILayout.Width(52f), GUILayout.Height(22f));
+            string priorityText = T("Priorité");
+            string collectText = T("Collecte");
+            GUILayout.Label(priorityText, _sMuted, GUILayout.Width(TextWidth(_sMuted, priorityText) + 8f), GUILayout.Height(22f));
+            GUILayout.Label(collectText, combatFirst ? _sMuted : _sLabelClip, GUILayout.Width(TextWidth(_sLabelClip, collectText) + 6f), GUILayout.Height(22f));
             bool combatSide = TwoWaySwitch(combatFirst);
-            GUILayout.Label("Combat", combatSide ? _sLabelClip : _sMuted, GUILayout.Height(22f));
+            GUILayout.Label(T("Combat"), combatSide ? _sLabelClip : _sMuted, GUILayout.Height(22f));
             GUILayout.EndHorizontal();
             SetPriority(combatSide ? CombatCollectPriority.Combat : CombatCollectPriority.Collect);
         }
         EndCard();
 
-        BeginCard("Modules");
-        bool repair = Switch(Plugin.RepairEnabled, "Réparation");
+        BeginCard(T("Modules"));
+        bool repair = Switch(Plugin.RepairEnabled, T("Réparation"));
         if (repair != Plugin.RepairEnabled)
             Plugin.SetRepairEnabled(repair);
 
-        bool respawn = Switch(Plugin.RespawnEnabled, "Réapparition");
+        bool respawn = Switch(Plugin.RespawnEnabled, T("Réapparition"));
         if (respawn != Plugin.RespawnEnabled)
             Plugin.SetRespawnEnabled(respawn);
 
-        bool raid = Switch(Plugin.RaidEnabled, "Carte Raid");
+        bool raid = Switch(Plugin.RaidEnabled, T("Carte Raid"));
         if (raid != Plugin.RaidEnabled)
             Plugin.SetRaidEnabled(raid);
         EndCard();
@@ -454,7 +735,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
         GUILayout.BeginHorizontal();
         GUILayout.Label(FormatDuration(elapsed), _sLabel);
-        if (GUILayout.Button("Remise à zéro", _sBtn, GUILayout.Width(100f), GUILayout.Height(20f)))
+        if (GUILayout.Button(T("Remise à zéro"), _sBtn, GUILayout.Width(100f), GUILayout.Height(20f)))
             ResourceTracker.Reset();
         GUILayout.EndHorizontal();
         Divider();
@@ -480,7 +761,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         }
 
         if (shown == 0)
-            Hint(counters.Count == 0 ? "En attente des compteurs." : "Aucun compteur n'a bougé.");
+            Hint(counters.Count == 0 ? T("En attente des compteurs.") : T("Aucun compteur n'a bougé."));
     }
 
     private static string FormatDuration(float seconds)
@@ -496,8 +777,8 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         EtatJeuSnapshot raidSnapshot = GameState.ObtenirSnapshot();
         FicheJoueur player = raidSnapshot == null ? null : raidSnapshot.Joueur;
 
-        BeginCard("Raid", player == null ? null : "Niveau " + player.Niveau);
-        bool bossPriority = Switch(Plugin.RaidBossPriority, "Boss en priorité");
+        BeginCard(T("Raid"), player == null ? null : T("Niveau") + " " + player.Niveau);
+        bool bossPriority = Switch(Plugin.RaidBossPriority, T("Boss en priorité"));
         if (bossPriority != Plugin.RaidBossPriority)
             Plugin.SetRaidBossPriority(bossPriority);
         DrawFullHealthSwitch();
@@ -508,18 +789,18 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             int damage = player.RaidHasar;
             int cap = RulesData.Raid.BossDamageCap;
             GUILayout.Space(4f);
-            Row("Dégâts boss", damage.ToString("N0", CultureInfo.InvariantCulture).Replace(',', '.')
+            Row(T("Dégâts boss"), damage.ToString("N0", CultureInfo.InvariantCulture).Replace(',', '.')
                 + " / " + cap.ToString("N0", CultureInfo.InvariantCulture).Replace(',', '.'));
             DrawBar(cap <= 0 ? 0f : damage / (float)cap, damage >= cap ? ColWarn : ColAccent, 4f);
         }
         EndCard();
 
-        BeginCard("Petite Raid", player == null ? null : "Talisman " + player.Talisman);
+        BeginCard(T("Petite Raid"), player == null ? null : T("Talisman") + " " + player.Talisman);
         DrawRaidTargetRow("Sunburst", "mob");
         DrawRaidTargetRow("Ameterasu", "boss");
         EndCard();
 
-        BeginCard("Grande Raid", player == null ? null : "Talisman " + player.TalismanAcemi);
+        BeginCard(T("Grande Raid"), player == null ? null : T("Talisman") + " " + player.TalismanAcemi);
         DrawRaidTargetRow("Léviathan", "mob");
         DrawRaidTargetRow("Behemoth", "boss");
         EndCard();
@@ -530,7 +811,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     {
         TargetCategory category = RaidRules.WeaponCategoryFor(name);
         GUILayout.BeginHorizontal();
-        GUILayout.Label(name + " (" + role + ")", _sLabelClip, GUILayout.Height(20f));
+        GUILayout.Label(name + " (" + T(role) + ")", _sLabelClip, GUILayout.Height(20f));
         AmmoField(category, name, 138f);
         GUILayout.EndHorizontal();
     }
@@ -540,41 +821,41 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         EtatJeuSnapshot snapshot = GameState.ObtenirSnapshot();
         FicheJoueur player = snapshot == null ? null : snapshot.Joueur;
 
-        BeginCard("Coque");
+        BeginCard(T("Coque"));
         if (player == null || player.VieMax <= 0)
         {
-            Hint("En attente du joueur.");
+            Hint(T("En attente du joueur."));
         }
         else
         {
-            Row("PV", player.Vie + " / " + player.VieMax
+            Row(T("PV"), player.Vie + " / " + player.VieMax
                 + "  (" + player.PourcentageVie.ToString("0", CultureInfo.InvariantCulture) + " %)");
             DrawHpBar(player.PourcentageVie);
         }
         EndCard();
 
-        BeginCard("Réparation");
+        BeginCard(T("Réparation"));
         int repairMode = Segmented(
             Plugin.RepairPausesActivity ? 1 : 0,
-            "En activité",
-            "À l'arrêt");
+            T("En activité"),
+            T("À l'arrêt"));
         Plugin.SetRepairPausesActivity(repairMode == 1);
 
-        int repairPercent = PercentSlider("Réparer si PV <=", Plugin.RepairPercent);
+        int repairPercent = PercentSlider(T("Réparer si PV <="), Plugin.RepairPercent);
         if (repairPercent != Plugin.RepairPercent)
             Plugin.SetRepairPercent(repairPercent);
         EndCard();
 
-        BeginCard("PV bas");
-        bool flee = Switch(Plugin.FleeEnabled, "Fuite activée");
+        BeginCard(T("PV bas"));
+        bool flee = Switch(Plugin.FleeEnabled, T("Fuite activée"));
         if (flee != Plugin.FleeEnabled)
             Plugin.SetFleeEnabled(flee);
 
-        int fleePercent = PercentSlider("Fuir si PV <=", Plugin.FleePercent);
+        int fleePercent = PercentSlider(T("Fuir si PV <="), Plugin.FleePercent);
         if (fleePercent != Plugin.FleePercent)
             Plugin.SetFleePercent(fleePercent);
 
-        bool fleeCollect = Switch(Plugin.FleeCollectEnabled, "Collecter pendant la fuite");
+        bool fleeCollect = Switch(Plugin.FleeCollectEnabled, T("Collecter pendant la fuite"));
         if (fleeCollect != Plugin.FleeCollectEnabled)
             Plugin.SetFleeCollectEnabled(fleeCollect);
         EndCard();
@@ -588,14 +869,14 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         DrawLongRangeSwitch();
         Divider();
 
-        DrawTargetGroup(TargetCategory.Npc, "NPC");
-        DrawTargetGroup(TargetCategory.Monster, "Monstres");
+        DrawTargetGroup(TargetCategory.Npc, T("NPC"));
+        DrawTargetGroup(TargetCategory.Monster, T("Monstres"));
     }
 
     // Même réglage que dans Contrôle : l'option est accessible depuis Cibles et Carte Raid.
     private void DrawFullHealthSwitch()
     {
-        bool fullHealth = Switch(Plugin.OnlyFullHealthTargets, "Cibles à PV max seulement");
+        bool fullHealth = Switch(Plugin.OnlyFullHealthTargets, T("Cibles à PV max seulement"));
         if (fullHealth != Plugin.OnlyFullHealthTargets)
             Plugin.SetOnlyFullHealthTargets(fullHealth);
     }
@@ -603,7 +884,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     // Même réglage que l'ancienne case de Contrôle : accessible depuis Cibles et Raid.
     private void DrawLongRangeSwitch()
     {
-        bool longRange = Switch(CopperWire.LongRange, "Longue portée");
+        bool longRange = Switch(CopperWire.LongRange, T("Longue portée"));
         if (longRange != CopperWire.LongRange)
             CopperWire.SetLongRange(longRange);
     }
@@ -612,7 +893,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     {
         RefreshCollectibleCatalog();
 
-        BeginCard("Types   " + _enabledCollectibleTypes.Count + " / " + _displayCollectibleTypes.Count);
+        BeginCard(T("Types") + "   " + _enabledCollectibleTypes.Count + " / " + _displayCollectibleTypes.Count);
         for (int i = 0; i < _displayCollectibleTypes.Count; i++)
         {
             string typeName = _displayCollectibleTypes[i];
@@ -629,7 +910,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             }
         }
         if (_displayCollectibleTypes.Count == 0)
-            Hint("Aucun type pour l'instant.");
+            Hint(T("Aucun type pour l'instant."));
         EndCard();
     }
 
@@ -683,9 +964,9 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     {
         RefreshEventShips(GameState.ObtenirSnapshot());
 
-        BeginCard("Navires d'événement   " + _eventShips.Count);
+        BeginCard(T("Navires d'événement") + "   " + _eventShips.Count);
         if (_eventShips.Count == 0)
-            Hint("Aucun navire pour l'instant.");
+            Hint(T("Aucun navire pour l'instant."));
         for (int i = 0; i < _eventShips.Count; i++)
             DrawEventShipRow(_eventShips[i]);
         EndCard();
@@ -697,12 +978,12 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         GUILayout.BeginVertical(_sSeg);
         GUILayout.BeginHorizontal();
         GUILayout.Label(string.IsNullOrEmpty(pnj.Nom) ? "?" : pnj.Nom, _sLabel);
-        GUILayout.Label("PV " + pnj.Vie + " / " + pnj.VieMax, _sValue, GUILayout.Width(150f));
+        GUILayout.Label(T("PV") + " " + pnj.Vie + " / " + pnj.VieMax, _sValue, GUILayout.Width(150f));
         GUILayout.EndHorizontal();
 
         string carte = !string.IsNullOrEmpty(pnj.NomHarita)
             ? pnj.NomHarita
-            : pnj.Harita > 0 ? "carte " + pnj.Harita : "carte inconnue";
+            : pnj.Harita > 0 ? T("carte") + " " + pnj.Harita : T("carte inconnue");
         GUILayout.Label(
             carte + "  |  " + (pnj.CoordonneeSayi ?? "?") + " " + (pnj.CoordonneeHarf ?? "?"),
             _sMuted);
@@ -767,7 +1048,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private void Row(string label, string value)
     {
         GUILayout.BeginHorizontal();
-        GUILayout.Label(label, _sMuted, GUILayout.Width(78f));
+        GUILayout.Label(label, _sMuted, GUILayout.Width(Mathf.Max(78f, TextWidth(_sMuted, label) + 8f)));
         GUILayout.Label(value, _sLabel);
         GUILayout.EndHorizontal();
     }
@@ -812,7 +1093,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private int PercentSlider(string label, int value)
     {
         GUILayout.BeginHorizontal();
-        GUILayout.Label(label, _sLabelClip, GUILayout.Width(104f), GUILayout.Height(20f));
+        GUILayout.Label(label, _sLabelClip, GUILayout.Width(Mathf.Max(104f, TextWidth(_sLabelClip, label) + 8f)), GUILayout.Height(20f));
         Rect r = GUILayoutUtility.GetRect(40f, 14f, GUILayout.ExpandWidth(true));
         if (Event.current.type == EventType.Repaint)
         {
@@ -893,7 +1174,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         Rect r = GUILayoutUtility.GetRect(width, 20f, GUILayout.Width(width));
 
         IReadOnlyList<AmmoDefinition> catalog = GetAmmoCatalog(category);
-        string caption = catalog.Count == 0 ? "indisponible" : ShortAmmo(category, ResolveAmmo(category, name));
+        string caption = catalog.Count == 0 ? T("indisponible") : ShortAmmo(category, ResolveAmmo(category, name));
 
         if (GUI.Button(r, caption, open ? _sSelectOpen : _sSelect) && catalog.Count > 0)
         {
@@ -903,6 +1184,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             }
             else
             {
+                _cfgOpen = false;
                 _editingAmmoTarget = key;
                 _ddCategory = category;
                 _ddName = name;
@@ -1056,7 +1338,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private string ShortAmmo(TargetCategory category, int? id)
     {
         if (!id.HasValue)
-            return "indisponible";
+            return T("indisponible");
 
         IReadOnlyList<AmmoDefinition> catalog = GetAmmoCatalog(category);
         for (int i = 0; i < catalog.Count; i++)
@@ -1169,6 +1451,39 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
                 float body = edgeWidth <= 0f ? 1f : Mathf.Clamp01(0.5f - (d + edgeWidth));
                 Color c = Color.Lerp(edge, fill, body);
                 c.a *= cover;
+                texture.SetPixel(x, y, c);
+            }
+        }
+        texture.Apply();
+        texture.hideFlags = HideFlags.HideAndDontSave;
+        RoundCache[key] = texture;
+        return texture;
+    }
+
+    // Rectangle arrondi à dégradé horizontal (couleur c1 à gauche, c2 à droite), de taille exacte.
+    private static Texture2D RoundGradientTexture(int width, int height, int radius, Color c1, Color c2)
+    {
+        string key = "grad|" + width + "|" + height + "|" + radius + "|" + c1 + "|" + c2;
+        Texture2D cached;
+        if (RoundCache.TryGetValue(key, out cached) && cached != null)
+            return cached;
+
+        Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+        texture.filterMode = FilterMode.Bilinear;
+        texture.wrapMode = TextureWrapMode.Clamp;
+        float halfW = width * 0.5f;
+        float halfH = height * 0.5f;
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                float qx = Mathf.Abs(x + 0.5f - halfW) - (halfW - radius);
+                float qy = Mathf.Abs(y + 0.5f - halfH) - (halfH - radius);
+                float ox = Mathf.Max(qx, 0f);
+                float oy = Mathf.Max(qy, 0f);
+                float d = Mathf.Sqrt(ox * ox + oy * oy) + Mathf.Min(Mathf.Max(qx, qy), 0f) - radius;
+                Color c = Color.Lerp(c1, c2, width <= 1 ? 0f : x / (float)(width - 1));
+                c.a *= Mathf.Clamp01(0.5f - d);
                 texture.SetPixel(x, y, c);
             }
         }
@@ -1423,6 +1738,13 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
                 rings.Add(new Vector3(8, 8, 6f));
                 lines.Add(Poly(8, 4.5f, 8, 8, 10.5f, 9.5f));
                 break;
+            case 8: // engrenage
+                rings.Add(new Vector3(8, 8, 2.2f)); rings.Add(new Vector3(8, 8, 4.6f));
+                lines.Add(Poly(8, 1.5f, 8, 3.5f)); lines.Add(Poly(8, 12.5f, 8, 14.5f));
+                lines.Add(Poly(1.5f, 8, 3.5f, 8)); lines.Add(Poly(12.5f, 8, 14.5f, 8));
+                lines.Add(Poly(3.4f, 3.4f, 4.8f, 4.8f)); lines.Add(Poly(11.2f, 11.2f, 12.6f, 12.6f));
+                lines.Add(Poly(12.6f, 3.4f, 11.2f, 4.8f)); lines.Add(Poly(4.8f, 11.2f, 3.4f, 12.6f));
+                break;
             default: // chevron vers le bas
                 lines.Add(Poly(4.5f, 6, 8, 9.5f, 11.5f, 6));
                 break;
@@ -1460,46 +1782,56 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
     private void EnsureStyles()
     {
+        if (!_skinReady)
+        {
+            GUISkin baseSkin = GUI.skin;
+            _skin = null;
+            try
+            {
+                GUISkin copy = UnityEngine.Object.Instantiate(baseSkin);
+                if (copy != null)
+                {
+                    copy.hideFlags = HideFlags.HideAndDontSave;
+                    _skin = copy;
+                }
+            }
+            catch (Exception)
+            {
+                _skin = null;
+            }
+
+            _font = TryCreateFont();
+            if (_skin != null)
+            {
+                if (_font != null)
+                {
+                    _skin.label.font = _font;
+                    _skin.button.font = _font;
+                    _skin.box.font = _font;
+                }
+                StyleScrollbar(_skin);
+            }
+            _skinReady = true;
+        }
+
         if (_stylesReady && _texBg != null)
             return;
 
         _texBg = MakeTexture(ColBg);
-
-        GUISkin skin = GUI.skin;
-        _skin = null;
-        try
-        {
-            GUISkin copy = UnityEngine.Object.Instantiate(skin);
-            if (copy != null)
-            {
-                copy.hideFlags = HideFlags.HideAndDontSave;
-                skin = copy;
-                _skin = copy;
-            }
-        }
-        catch (Exception)
-        {
-            _skin = null;
-        }
-
-        _font = TryCreateFont();
-        if (_skin != null && _font != null)
-        {
-            skin.label.font = _font;
-            skin.button.font = _font;
-            skin.box.font = _font;
-        }
+        GUISkin skin = _skin != null ? _skin : GUI.skin;
 
         _texDot = RoundTexture(10, 5, Color.white, Color.white, 0f);
         _texBoxOff = RoundTexture(13, 3, ColBox, ColBoxEdge, 1f);
         _texBoxHover = RoundTexture(13, 3, ColBox, ColMuted, 1f);
-        _texBoxOn = RoundTexture(13, 3, ColAccent, ColAccent, 1f);
+        _texBoxOn = RoundGradientTexture(13, 13, 3, _accentA1, _accentA2);
+        _texPlayBg = RoundGradientTexture(34, 20, 5, _accentA1, _accentA2);
+        _texPlayGlow = RoundGradientTexture(34, 20, 5, Color.white, Color.white);
         _texCheck = CheckTexture(13, new Color(0.02f, 0.06f, 0.12f, 1f));
         _texPlay = PlayTexture(10);
         _texStop = RoundTexture(10, 2, Color.white, Color.white, 0f);
         _texLogo = BuildLogo();
         _icons.Clear();
-        for (int i = 0; i < 8; i++)
+        for (int i = 0; i < 9; i++)
             _icons.Add(BuildIcon(i));
 
         _sWindow = CloneStyle(skin.box);
@@ -1557,6 +1889,9 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         _sBtnPrimary = CloneStyle(_sBtn);
         RoundPaint(_sBtnPrimary, ColAccent, new Color(0.35f, 0.69f, 1f, 1f), new Color(0.02f, 0.06f, 0.12f, 1f), ColAccent, ColAccent, 5);
         _sBtnPrimary.fontStyle = FontStyle.Bold;
+
+        _sGhost = CloneStyle(_sBtn);
+        RoundPaint(_sGhost, ColClear, ColClear, ColText, ColClear, ColClear, 5);
 
         _sBtnDanger = CloneStyle(_sBtn);
         RoundPaint(_sBtnDanger, ColClear, new Color(0.94f, 0.36f, 0.36f, 0.14f), ColDanger, ColDanger, ColDanger, 5);
@@ -1642,9 +1977,6 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
         _sTrackFill = CloneStyle(_sTrack);
         RoundPaint(_sTrackFill, Color.white, Color.white, ColText, Color.white, Color.white, 2);
-
-        if (_skin != null)
-            StyleScrollbar(_skin);
 
         _pillText = null;
         _stylesReady = true;
@@ -1826,7 +2158,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         GUILayout.Space(3f);
         if (!TargetCatalog.IsInitialized)
         {
-            Hint("En attente du catalogue.");
+            Hint(T("En attente du catalogue."));
             return;
         }
 
@@ -1853,7 +2185,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         }
 
         if (catalog.Count == 0)
-            Hint("Aucun type.");
+            Hint(T("Aucun type."));
     }
 
     private void RefreshDisplayCatalogs()

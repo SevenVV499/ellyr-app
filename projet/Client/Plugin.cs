@@ -35,6 +35,8 @@ namespace EtatJoueurMod
         private static ConfigEntry<bool> _raidEnabled;
         private static ConfigEntry<bool> _raidBossPriority;
         private static ConfigEntry<bool> _respawnEnabled;
+        private static ConfigEntry<string> _themeId;
+        private static ConfigEntry<string> _language;
         private static ConfigEntry<bool> _onlyFullHealthTargets;
         private static readonly Dictionary<string, ConfigEntry<bool>> CollectibleTypeSettings =
             new Dictionary<string, ConfigEntry<bool>>(StringComparer.Ordinal);
@@ -142,6 +144,27 @@ namespace EtatJoueurMod
             SetSetting(_raidBossPriority, enabled);
         }
 
+        // Apparence de la console : identifiant du thème et code de langue ("auto" = langue du système).
+        public static string ThemeId
+        {
+            get { return _themeId == null ? "logo" : _themeId.Value; }
+        }
+
+        public static void SetThemeId(string id)
+        {
+            SetSetting(_themeId, id);
+        }
+
+        public static string Language
+        {
+            get { return _language == null ? "auto" : _language.Value; }
+        }
+
+        public static void SetLanguage(string code)
+        {
+            SetSetting(_language, code);
+        }
+
         public static bool RespawnEnabled
         {
             get { return _respawnEnabled == null || _respawnEnabled.Value; }
@@ -224,6 +247,10 @@ namespace EtatJoueurMod
                 "Enable the Raid map module: enter the Raid matching the player level when the medallion is available.");
             _respawnEnabled = _config.Bind("Respawn", "RespawnEnabled", true,
                 "Respawn module: when true, the bot presses the respawn button after a death; when false it does nothing on death.");
+            _themeId = _config.Bind("Console", "Theme", "logo",
+                "Console theme: logo, rouge, rgb or blanc.");
+            _language = _config.Bind("Console", "Language", "auto",
+                "Console language: auto (system language), en, tr, fr, de, es, pl, ru or it.");
             _raidBossPriority = _config.Bind("Raid", "RaidBossPriority", true,
                 "Raid maps: true = attack the boss first when it is visible; false = ignore the boss, only the mobs.");
             _fleePercent = _config.Bind("Survival", "FleePercent", 60,
