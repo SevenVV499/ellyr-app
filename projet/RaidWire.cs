@@ -110,14 +110,14 @@ public static class RaidWire
     // Cibles à traiter avant toutes les autres (boss), seulement si l'option est cochée.
     public static Func<PnjInfo, bool> ActivePriorityFilter
     {
-        get { return _phase == Phase.Active && _spec != null && Plugin.RaidBossPriority && !_bossCapReached ? IsBoss : (Func<PnjInfo, bool>)null; }
+        get { return _phase == Phase.Active && _spec != null && BrainContext.Settings.RaidBossPriority && !_bossCapReached ? IsBoss : (Func<PnjInfo, bool>)null; }
     }
 
     public static string Description
     {
         get
         {
-            if (!Plugin.RaidEnabled)
+            if (!BrainContext.Settings.RaidEnabled)
                 return "désactivée";
             switch (_phase)
             {
@@ -151,7 +151,7 @@ public static class RaidWire
      */
     public static bool Tick(Player player, EtatJeuSnapshot snapshot, bool fleeing, bool actionEngaged)
     {
-        if (!Plugin.RaidEnabled)
+        if (!BrainContext.Settings.RaidEnabled)
         {
             if (_phase != Phase.Idle)
                 Reset();
@@ -191,7 +191,7 @@ public static class RaidWire
                 // Le bot reste à l'arrêt (aucune action) jusqu'à ce que la carte change.
                 _blockedMap = map;
                 _phase = Phase.Blocked;
-                Plugin.Logger.LogError("[RaidWire] Carte inattendue après l'entrée : attendu "
+                BrainContext.Log.Error("[RaidWire] Carte inattendue après l'entrée : attendu "
                     + (_spec == null ? 0 : _spec.MapId) + ", obtenu " + map + ". Bot à l'arrêt.");
                 return true;
             }
@@ -273,7 +273,7 @@ public static class RaidWire
                 _attempt++;
                 _phase = Phase.Settling;
                 _phaseStartedAt = now;
-                Plugin.Logger.LogWarning("[RaidWire] Pas de changement de carte : nouvel essai " + _attempt + ".");
+                BrainContext.Log.Warning("[RaidWire] Pas de changement de carte : nouvel essai " + _attempt + ".");
                 return true;
         }
 
@@ -296,7 +296,7 @@ public static class RaidWire
     {
         _phase = Phase.CoolingDown;
         _cooldownUntil = Time.time + CooldownSeconds;
-        Plugin.Logger.LogWarning("[RaidWire] Entrée abandonnée : " + reason + ". Pause " + (int)CooldownSeconds + " s.");
+        BrainContext.Log.Warning("[RaidWire] Entrée abandonnée : " + reason + ". Pause " + (int)CooldownSeconds + " s.");
     }
 
     // Reproduit l'appel du bouton du jeu : les contrôles natifs (cooldown, stock, carte) restent actifs.
@@ -315,7 +315,7 @@ public static class RaidWire
             }
             if (menu == null)
             {
-                Plugin.Logger.LogError("[RaidWire] MenuManager introuvable.");
+                BrainContext.Log.Error("[RaidWire] MenuManager introuvable.");
                 return false;
             }
 
@@ -329,7 +329,7 @@ public static class RaidWire
         }
         catch (Exception e)
         {
-            Plugin.Logger.LogError("[RaidWire] Erreur d'entrée : " + e);
+            BrainContext.Log.Error("[RaidWire] Erreur d'entrée : " + e);
             return false;
         }
     }
@@ -468,7 +468,7 @@ public static class RaidWire
         if (key == _spec.MobName)
             return true;
         // Boss : ciblé seulement si l'option « boss en priorité » est cochée.
-        return Plugin.RaidBossPriority && !_bossCapReached && key == _spec.BossName;
+        return BrainContext.Settings.RaidBossPriority && !_bossCapReached && key == _spec.BossName;
     }
 
     private static bool IsBoss(PnjInfo pnj)

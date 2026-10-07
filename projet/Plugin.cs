@@ -62,6 +62,8 @@ namespace EtatJoueurMod
                 CollectibleCatalog.Initialize();
                 InitializeCollectibleConfiguration();
                 InitializeSurvivalConfiguration();
+                BrainContext.Settings = new PluginBrainSettings();
+                BrainContext.Log = new PluginBrainLog();
                 _targetCatalogDisconnectHandler =
                     DelegateSupport.ConvertDelegate<Il2CppSystem.Action>(new Action(ResetSessionCatalogs));
                 NetworkClient.OnDisconnectedEvent -= _targetCatalogDisconnectHandler;
@@ -289,5 +291,25 @@ namespace EtatJoueurMod
             Application.targetFrameRate = _foregroundTargetFrameRate;
             _backgroundFrameRateApplied = false;
         }
+    }
+
+    // Réglages du cerveau : lus dans la configuration BepInEx du plugin (côté client).
+    internal sealed class PluginBrainSettings : IBrainSettings
+    {
+        public bool RepairEnabled { get { return Plugin.RepairEnabled; } }
+        public int RepairPercent { get { return Plugin.RepairPercent; } }
+        public bool RepairPausesActivity { get { return Plugin.RepairPausesActivity; } }
+        public bool FleeEnabled { get { return Plugin.FleeEnabled; } }
+        public int FleePercent { get { return Plugin.FleePercent; } }
+        public bool FleeCollectEnabled { get { return Plugin.FleeCollectEnabled; } }
+        public bool OnlyFullHealthTargets { get { return Plugin.OnlyFullHealthTargets; } }
+        public bool RaidEnabled { get { return Plugin.RaidEnabled; } }
+        public bool RaidBossPriority { get { return Plugin.RaidBossPriority; } }
+    }
+
+    internal sealed class PluginBrainLog : IBrainLog
+    {
+        public void Warning(string message) { Plugin.Logger.LogWarning(message); }
+        public void Error(string message) { Plugin.Logger.LogError(message); }
     }
 }

@@ -599,7 +599,7 @@ public sealed class BluePencil
                 // nouvelle cible, jamais un combat déjà en cours.
                 // Le boss de Raid en est exclu : la priorité Raid fait foi, même entamé.
                 bool priority = _raidPriorityPnj != null && _raidPriorityPnj(pnj);
-                if (!priority && Plugin.OnlyFullHealthTargets && pnj.VieMax > 0 && pnj.Vie < pnj.VieMax)
+                if (!priority && BrainContext.Settings.OnlyFullHealthTargets && pnj.VieMax > 0 && pnj.Vie < pnj.VieMax)
                     continue;
                 if (AUneRecompenseConnue(snapshot, pnj.Id, RewardSourceType.Monstre, RewardSourceType.Pnj))
                     continue;

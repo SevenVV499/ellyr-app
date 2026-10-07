@@ -64,7 +64,7 @@ public static class RespawnWire
         _brainWarned = false;
 
         if (_brain == null)
-            Plugin.Logger.LogError(
+            BrainContext.Log.Error(
                 "[RespawnWire] Configurer appelé sans BehaviorBrain : " +
                 "le SystemState Respawn ne sera pas synchronisé.");
     }
@@ -91,7 +91,7 @@ public static class RespawnWire
         if (_brain == null && !_brainWarned)
         {
             _brainWarned = true;
-            Plugin.Logger.LogError(
+            BrainContext.Log.Error(
                 "[RespawnWire] Aucun BehaviorBrain configuré : " +
                 "le respawn fonctionne sans synchroniser le SystemState.");
         }
@@ -118,7 +118,7 @@ public static class RespawnWire
              */
             if (_brain != null && _brain.IsRespawning)
             {
-                Plugin.Logger.LogWarning(
+                BrainContext.Log.Warning(
                     "[RespawnWire] Brain en Respawn alors que RespawnWire est inactif : sortie forcée.");
                 _brain.ExitRespawn();
             }
@@ -189,7 +189,7 @@ public static class RespawnWire
             {
                 if (Time.time - _startedAt >= RespawnAttemptTimeoutSeconds)
                 {
-                    Plugin.Logger.LogWarning(
+                    BrainContext.Log.Warning(
                         "[RespawnWire] Timeout avant disponibilité du bouton de respawn.");
 
                     RestartRespawnAttempt(player);
@@ -216,7 +216,7 @@ public static class RespawnWire
                 return;
             }
 
-            Plugin.Logger.LogWarning(
+            BrainContext.Log.Warning(
                 "[RespawnWire] Timeout après YenidenDog(1) (tentative " +
                 _attempts + "/" + MaxRespawnCommandAttempts + "). Nouvelle tentative.");
 
@@ -268,7 +268,7 @@ public static class RespawnWire
                 if (!_gameManagerWarned)
                 {
                     _gameManagerWarned = true;
-                    Plugin.Logger.LogWarning(
+                    BrainContext.Log.Warning(
                         "[RespawnWire] GameManager.gm indisponible.");
                 }
                 return;
@@ -294,7 +294,7 @@ public static class RespawnWire
         }
         catch (Exception e)
         {
-            Plugin.Logger.LogError(
+            BrainContext.Log.Error(
                 "[RespawnWire] Erreur YenidenDog(1) (tentative " +
                 _attempts + "/" + MaxRespawnCommandAttempts + ") : " + e);
         }
@@ -337,7 +337,7 @@ public static class RespawnWire
         }
         catch (Exception e)
         {
-            Plugin.Logger.LogError(
+            BrainContext.Log.Error(
                 "[RespawnWire] Erreur purge des récompenses : " + e);
         }
 
@@ -357,7 +357,7 @@ public static class RespawnWire
     {
         _abandoned = true;
 
-        Plugin.Logger.LogError(
+        BrainContext.Log.Error(
             "[RespawnWire] " + MaxRespawnCommandAttempts +
             " tentatives de YenidenDog(1) sans confirmation : abandon des envois. " +
             "Le système reste en Respawn et observe l'état du joueur.");
@@ -407,7 +407,7 @@ public static class RespawnWire
         }
         catch (Exception e)
         {
-            Plugin.Logger.LogError(
+            BrainContext.Log.Error(
                 "[RespawnWire] Erreur arrêt combat : " + e);
         }
     }

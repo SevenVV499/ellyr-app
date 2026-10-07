@@ -11,10 +11,10 @@ using UnityEngine;
  *   et n'autorise que la Navigation (déplacements aléatoires habituels) jusqu'à
  *   la sortie de fuite.
  *
- * Les deux seuils sont indépendants (Plugin.RepairPercent / Plugin.FleePercent).
+ * Les deux seuils sont indépendants (BrainContext.Settings.RepairPercent / BrainContext.Settings.FleePercent).
  *
  * L'arrêt d'activité est porté par la réparation « Stopped »
- * (Plugin.RepairPausesActivity, voir UpdateRepairPause) ; la fuite reste prioritaire.
+ * (BrainContext.Settings.RepairPausesActivity, voir UpdateRepairPause) ; la fuite reste prioritaire.
  *
  * Sortie de fuite : PV >= seuil réparation ET PV > seuil fuite, c'est-à-dire
  * au-dessus des deux seuils. Pendant la fuite, la réparation est tentée à
@@ -92,7 +92,7 @@ public static class SurvivalWire
 
     private static void UpdateFlee(float percent)
     {
-        if (!Plugin.FleeEnabled)
+        if (!BrainContext.Settings.FleeEnabled)
         {
             if (_fleeing)
                 EndFlee("fuite désactivée");
@@ -100,7 +100,7 @@ public static class SurvivalWire
             return;
         }
 
-        float fleePercent = Plugin.FleePercent;
+        float fleePercent = BrainContext.Settings.FleePercent;
         if (!_fleeing)
         {
             if (percent > fleePercent)
@@ -114,7 +114,7 @@ public static class SurvivalWire
             return;
         }
 
-        if (percent >= Plugin.RepairPercent && percent > fleePercent)
+        if (percent >= BrainContext.Settings.RepairPercent && percent > fleePercent)
         {
             EndFlee("PV remontés à " + percent.ToString("F0") + " %");
             return;
@@ -129,14 +129,14 @@ public static class SurvivalWire
     }
 
     /*
-     * Mode « réparer puis reprendre » (Plugin.RepairPausesActivity) : dès que les PV
+     * Mode « réparer puis reprendre » (BrainContext.Settings.RepairPausesActivity) : dès que les PV
      * passent sous le seuil de réparation, toute activité est mise en pause (navire
      * immobile, géré par CopperWire) tandis que la réparation travaille ; l'activité
      * ne reprend qu'aux PV pleins. La fuite reste prioritaire si elle est active.
      */
     private static void UpdateRepairPause(FicheJoueur joueur, float percent)
     {
-        if (!Plugin.RepairPausesActivity || !Plugin.RepairEnabled)
+        if (!BrainContext.Settings.RepairPausesActivity || !BrainContext.Settings.RepairEnabled)
         {
             _repairPaused = false;
             _pauseSuppressed = false;
@@ -145,10 +145,10 @@ public static class SurvivalWire
 
         if (!_repairPaused)
         {
-            if (percent > Plugin.RepairPercent)
+            if (percent > BrainContext.Settings.RepairPercent)
                 _pauseSuppressed = false;
 
-            if (!_pauseSuppressed && percent <= Plugin.RepairPercent && joueur.Vie < joueur.VieMax)
+            if (!_pauseSuppressed && percent <= BrainContext.Settings.RepairPercent && joueur.Vie < joueur.VieMax)
             {
                 _repairPaused = true;
                 _pauseStartedAt = Time.time;
@@ -179,13 +179,13 @@ public static class SurvivalWire
      */
     private static void TryRepair(Player player, FicheJoueur joueur, float percent)
     {
-        if (!Plugin.RepairEnabled
+        if (!BrainContext.Settings.RepairEnabled
             || joueur.Reparation
             || joueur.Vie >= joueur.VieMax
             || Time.time < _nextRepairAt)
             return;
 
-        if (percent > Plugin.RepairPercent && !_fleeing && !_repairPaused)
+        if (percent > BrainContext.Settings.RepairPercent && !_fleeing && !_repairPaused)
             return;
 
         _nextRepairAt = Time.time + RepairRetrySeconds;
@@ -195,7 +195,7 @@ public static class SurvivalWire
         }
         catch (Exception e)
         {
-            Plugin.Logger.LogError("[SurvivalWire] Player.tamirOlBaslat a échoué : " + e);
+            BrainContext.Log.Error("[SurvivalWire] Player.tamirOlBaslat a échoué : " + e);
         }
     }
 
