@@ -218,7 +218,7 @@ public static class CopperWire
         _executedAction = null;
         Planner.CancelCurrent();
         RespawnWire.Reset();
-        SurvivalWire.Reset();
+        SurvivalRules.Reset();
         RaidRules.Reset();
     }
 
@@ -318,7 +318,7 @@ public static class CopperWire
         RespawnWire.Tick(player, snapshot);
         if (etaitActif || RespawnWire.IsActive || Brain.IsRespawning)
         {
-            SurvivalWire.Reset();
+            SurvivalRules.Reset();
             RaidRules.Reset();
             if (_executedAction != null)
             {
@@ -350,10 +350,10 @@ public static class CopperWire
         RefreshSpecialMapBounds(player, snapshot.Joueur.Harita);
 
         bool fleeEnded;
-        bool fleeing = SurvivalWire.Tick(player, snapshot, out fleeEnded);
+        bool fleeing = SurvivalRules.Tick(snapshot, Time.time, out fleeEnded);
         // Arrêt total (navire immobile) : pause de réparation « Stopped » quand la
         // fuite n'est pas active. Seule la réparation travaille.
-        if (!fleeing && SurvivalWire.IsRepairPaused)
+        if (!fleeing && SurvivalRules.IsRepairPaused)
         {
             _wasHalted = true;
             HaltAllActivity(player, snapshot);
@@ -386,7 +386,7 @@ public static class CopperWire
         {
             // La fuite est prioritaire : Combat abandonné et interdit, Collecte
             // seulement si l'option est cochée, sinon seule la Navigation continue.
-            // La réparation (traitée par SurvivalWire) reste parallèle.
+            // La réparation (traitée par SurvivalRules) reste parallèle.
             AbandonActionForFlee(player);
         }
         else if (fleeEnded)

@@ -256,9 +256,9 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             return "ARRÊTÉ";
         if (RespawnWire.IsActive)
             return "RÉAPPARITION";
-        if (SurvivalWire.IsFleeing)
+        if (SurvivalRules.IsFleeing)
             return "FUITE";
-        if (SurvivalWire.IsRepairPaused)
+        if (SurvivalRules.IsRepairPaused)
             return "RÉPARATION";
         BehaviorAction action = CopperWire.CurrentAction;
         return action == null ? "INACTIF" : ActionLabel(action.Type).ToUpperInvariant();
@@ -268,9 +268,9 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     {
         if (!CopperWire.AutomationEnabled)
             return ColMuted;
-        if (SurvivalWire.IsFleeing)
+        if (SurvivalRules.IsFleeing)
             return ColDanger;
-        if (RespawnWire.IsActive || SurvivalWire.IsRepairPaused)
+        if (RespawnWire.IsActive || SurvivalRules.IsRepairPaused)
             return ColWarn;
         return ColOk;
     }

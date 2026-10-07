@@ -1,13 +1,12 @@
 using System;
 using EtatJoueurMod;
-using UnityEngine;
 
 /*
  * Mécanique centrale de survie (PV) : Réparation + Fuite.
  *
- * - Réparation : parallèle à l'activité. Ne touche jamais au Brain ; elle envoie
- *   seulement Player.tamirOlBaslat() tant que les PV sont sous le seuil.
- * - Fuite : prioritaire. Quand elle démarre, CopperWire abandonne Combat (et Collect sauf option)
+ * - Réparation : parallèle à l'activité. Ne touche jamais au Brain ; elle demande seulement au client
+ *   (ISurvivalActions.Repair) de réparer tant que les PV sont sous le seuil.
+ * - Fuite : prioritaire. Quand elle démarre, le client abandonne Combat (et Collect sauf option)
  *   et n'autorise que la Navigation (déplacements aléatoires habituels) jusqu'à
  *   la sortie de fuite.
  *
@@ -21,7 +20,7 @@ using UnityEngine;
  * chaque PV < PV max (si elle est activée) pour que les PV puissent remonter
  * même quand le seuil de réparation est plus bas que le seuil de fuite.
  */
-public static class SurvivalWire
+public static class SurvivalRules
 {
     // Délai minimal entre deux Commands Repair() : une réparation interrompue
     // (tir reçu...) est retentée tant que la condition de PV reste vraie.
@@ -42,6 +41,9 @@ public static class SurvivalWire
     private static float _fleeStartedAt;
     private static float _nextRepairAt;
 
+    // Horloge du jeu (secondes), fournie par le client à chaque Tick : les règles ne lisent pas le temps elles-mêmes.
+    private static float _now;
+
     public static bool IsFleeing { get { return _fleeing; } }
     // Mode « réparer puis reprendre » : activité arrêtée jusqu'aux PV pleins.
     public static bool IsRepairPaused { get { return _repairPaused; } }
@@ -59,14 +61,14 @@ public static class SurvivalWire
      * Évalue la survie sur un snapshot. Renvoie true tant que la fuite est active.
      * ended signale la fin de fuite survenue pendant cet appel.
      */
-    public static bool Tick(Player player, EtatJeuSnapshot snapshot, out bool ended)
+    public static bool Tick(EtatJeuSnapshot snapshot, float now, out bool ended)
     {
         ended = false;
+        _now = now;
 
         bool wasFleeing = _fleeing;
         FicheJoueur joueur = snapshot == null ? null : snapshot.Joueur;
-        if (player == null
-            || joueur == null
+        if (joueur == null
             || IsSnapshotStale(snapshot)
             || joueur.Vie <= 0
             || joueur.VieMax <= 0)
@@ -84,7 +86,7 @@ public static class SurvivalWire
         float percent = joueur.PourcentageVie;
         UpdateFlee(percent);
         UpdateRepairPause(joueur, percent);
-        TryRepair(player, joueur, percent);
+        TryRepair(joueur, percent);
 
         ended = wasFleeing && !_fleeing;
         return _fleeing;
@@ -109,7 +111,7 @@ public static class SurvivalWire
             if (!_fleeSuppressed && percent <= fleePercent)
             {
                 _fleeing = true;
-                _fleeStartedAt = Time.time;
+                _fleeStartedAt = _now;
             }
             return;
         }
@@ -120,7 +122,7 @@ public static class SurvivalWire
             return;
         }
 
-        if (Time.time - _fleeStartedAt >= FleeMaxSeconds)
+        if (_now - _fleeStartedAt >= FleeMaxSeconds)
         {
             // Pas de nouvelle fuite tant que les PV ne sont pas repassés au-dessus du seuil.
             _fleeSuppressed = true;
@@ -131,7 +133,7 @@ public static class SurvivalWire
     /*
      * Mode « réparer puis reprendre » (BrainContext.Settings.RepairPausesActivity) : dès que les PV
      * passent sous le seuil de réparation, toute activité est mise en pause (navire
-     * immobile, géré par CopperWire) tandis que la réparation travaille ; l'activité
+     * immobile, géré par le client) tandis que la réparation travaille ; l'activité
      * ne reprend qu'aux PV pleins. La fuite reste prioritaire si elle est active.
      */
     private static void UpdateRepairPause(FicheJoueur joueur, float percent)
@@ -151,7 +153,7 @@ public static class SurvivalWire
             if (!_pauseSuppressed && percent <= BrainContext.Settings.RepairPercent && joueur.Vie < joueur.VieMax)
             {
                 _repairPaused = true;
-                _pauseStartedAt = Time.time;
+                _pauseStartedAt = _now;
             }
             return;
         }
@@ -160,7 +162,7 @@ public static class SurvivalWire
         {
             _repairPaused = false;
         }
-        else if (Time.time - _pauseStartedAt >= FleeMaxSeconds)
+        else if (_now - _pauseStartedAt >= FleeMaxSeconds)
         {
             _pauseSuppressed = true;
             _repairPaused = false;
@@ -177,26 +179,19 @@ public static class SurvivalWire
      * (ou pendant une fuite), sans jamais modifier l'activité courante.
      * Réparation en cours (état rapporté par le jeu) : rien à renvoyer.
      */
-    private static void TryRepair(Player player, FicheJoueur joueur, float percent)
+    private static void TryRepair(FicheJoueur joueur, float percent)
     {
         if (!BrainContext.Settings.RepairEnabled
             || joueur.Reparation
             || joueur.Vie >= joueur.VieMax
-            || Time.time < _nextRepairAt)
+            || _now < _nextRepairAt)
             return;
 
         if (percent > BrainContext.Settings.RepairPercent && !_fleeing && !_repairPaused)
             return;
 
-        _nextRepairAt = Time.time + RepairRetrySeconds;
-        try
-        {
-            player.tamirOlBaslat();
-        }
-        catch (Exception e)
-        {
-            BrainContext.Log.Error("[SurvivalWire] Player.tamirOlBaslat a échoué : " + e);
-        }
+        _nextRepairAt = _now + RepairRetrySeconds;
+        BrainContext.SurvivalActions.Repair();
     }
 
     private static bool IsSnapshotStale(EtatJeuSnapshot snapshot)

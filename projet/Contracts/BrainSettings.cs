@@ -33,6 +33,7 @@ namespace EtatJoueurMod
         private static IBrainLog _log;
         private static IPlannerServices _services;
         private static IRaidActions _raidActions;
+        private static ISurvivalActions _survivalActions;
 
         // Réglages neutres tant que le client n'a rien renseigné : tout est désactivé.
         private sealed class DefaultSettings : IBrainSettings
@@ -85,8 +86,14 @@ namespace EtatJoueurMod
             public bool TryEnter(bool petiteRaid) { return false; }
         }
 
+        private sealed class NullSurvivalActions : ISurvivalActions
+        {
+            public void Repair() { }
+        }
+
         private static readonly IPlannerServices NullServicesValue = new NullServices();
         private static readonly IRaidActions NullRaidActionsValue = new NullRaidActions();
+        private static readonly ISurvivalActions NullSurvivalActionsValue = new NullSurvivalActions();
         private static readonly IBrainSettings DefaultValues = new DefaultSettings();
         private static readonly IBrainLog NullValue = new NullLog();
 
@@ -106,6 +113,12 @@ namespace EtatJoueurMod
         {
             get { return _raidActions ?? NullRaidActionsValue; }
             set { _raidActions = value; }
+        }
+
+        public static ISurvivalActions SurvivalActions
+        {
+            get { return _survivalActions ?? NullSurvivalActionsValue; }
+            set { _survivalActions = value; }
         }
 
         public static IBrainLog Log

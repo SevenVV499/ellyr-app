@@ -8,4 +8,10 @@ namespace EtatJoueurMod
         // Lance l'entrée en Raid (petite ou grande). Faux si l'appel n'a pas pu être fait.
         bool TryEnter(bool petiteRaid);
     }
+
+    public interface ISurvivalActions
+    {
+        // Envoie la commande de réparation du navire (le client garde la référence au joueur).
+        void Repair();
+    }
 }

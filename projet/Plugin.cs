@@ -66,6 +66,7 @@ namespace EtatJoueurMod
                 BrainContext.Log = new PluginBrainLog();
                 BrainContext.Services = new ClientPlannerServices();
                 BrainContext.RaidActions = new ClientRaidActions();
+                BrainContext.SurvivalActions = new ClientSurvivalActions();
                 _targetCatalogDisconnectHandler =
                     DelegateSupport.ConvertDelegate<Il2CppSystem.Action>(new Action(ResetSessionCatalogs));
                 NetworkClient.OnDisconnectedEvent -= _targetCatalogDisconnectHandler;
