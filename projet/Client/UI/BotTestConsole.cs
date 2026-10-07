@@ -29,7 +29,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private const int DropMaxRows = 7;
 
     // Palette
-    private static readonly Color ColBg = new Color(0.063f, 0.082f, 0.110f, 0.98f);
+    private static readonly Color ColBg = new Color(0f, 0f, 0f, 1f);
     private static readonly Color ColHeader = new Color(0.063f, 0.082f, 0.110f, 1f);
     private static readonly Color ColSidebar = new Color(0.047f, 0.063f, 0.086f, 1f);
     private static readonly Color ColLine = new Color(0.114f, 0.145f, 0.192f, 1f);
@@ -468,11 +468,15 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
                 continue;
 
             shown++;
-            GUILayout.BeginHorizontal();
-            GUILayout.Label(counter.Name, _sLabelClip, GUILayout.Height(18f));
-            GUILayout.Label(counter.TotalText, _sValue, GUILayout.Width(74f));
-            GUILayout.Label(counter.PerHourText(elapsed), _sMuted, GUILayout.Width(70f));
-            GUILayout.EndHorizontal();
+            Rect row = GUILayoutUtility.GetRect(10f, 18f, GUILayout.ExpandWidth(true));
+            const float totalWidth = 84f;
+            const float perHourWidth = 76f;
+            const float columnGap = 10f;
+            float nameWidth = Mathf.Max(40f, row.width - totalWidth - perHourWidth - columnGap);
+            GUI.Label(new Rect(row.x, row.y, nameWidth, row.height), counter.Name, _sLabelClip);
+            GUI.Label(new Rect(row.x + nameWidth, row.y, totalWidth, row.height), counter.TotalText, _sValue);
+            GUI.Label(new Rect(row.x + nameWidth + totalWidth + columnGap, row.y, perHourWidth, row.height),
+                counter.PerHourText(elapsed), _sRight);
         }
 
         if (shown == 0)
@@ -726,7 +730,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         Rect r = GUILayoutUtility.GetRect(30f, 22f, GUILayout.Width(30f), GUILayout.Height(22f));
         Rect track = new Rect(r.x, r.y + 3f, 30f, 16f);
         Event e = Event.current;
-        if (e.type == EventType.MouseDown && e.button == 0 && r.Contains(e.mousePosition))
+        if (e.type == EventType.MouseDown && e.button == 0 && track.Contains(e.mousePosition))
         {
             right = !right;
             e.Use();
@@ -772,8 +776,11 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private bool Switch(bool value, string label)
     {
         Rect row = GUILayoutUtility.GetRect(10f, 20f, GUILayout.ExpandWidth(true));
+        Rect box = new Rect(row.x + 1f, row.y + (row.height - 13f) * 0.5f, 13f, 13f);
+        // Seul le carré (avec 2 px de marge) réagit : un clic dans le vide à droite ne coche rien.
+        Rect hit = new Rect(box.x - 2f, box.y - 2f, box.width + 4f, box.height + 4f);
         Event e = Event.current;
-        bool hover = row.Contains(e.mousePosition);
+        bool hover = hit.Contains(e.mousePosition);
         if (e.type == EventType.MouseDown && e.button == 0 && hover)
         {
             value = !value;
@@ -782,7 +789,6 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
         if (e.type == EventType.Repaint)
         {
-            Rect box = new Rect(row.x + 1f, row.y + (row.height - 13f) * 0.5f, 13f, 13f);
             GUI.DrawTexture(box, value ? _texBoxOn : (hover ? _texBoxHover : _texBoxOff));
             if (value)
                 GUI.DrawTexture(box, _texCheck);
@@ -1532,6 +1538,8 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         _sValue = CloneStyle(_sLabel);
         _sValue.alignment = TextAnchor.MiddleRight;
         _sValue.fontStyle = FontStyle.Bold;
+        _sValue.wordWrap = false;
+        _sValue.clipping = TextClipping.Clip;
 
         _sTab = CloneStyle(skin.button);
         RoundPaint(_sTab, ColClear, new Color(1f, 1f, 1f, 0.06f), ColMuted, ColClear, ColClear, 5);
@@ -1601,6 +1609,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         _sRight.alignment = TextAnchor.MiddleRight;
         _sRight.fontSize = 10;
         _sRight.wordWrap = false;
+        _sRight.clipping = TextClipping.Clip;
 
         _sTip = CloneStyle(_sPopup);
         _sTip.alignment = TextAnchor.MiddleCenter;
@@ -1655,6 +1664,19 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         skin.verticalScrollbarThumb.active.background = thumbHover;
         skin.verticalScrollbarThumb.fixedWidth = 8f;
         skin.verticalScrollbarThumb.border = new RectOffset(4, 4, 4, 4);
+
+        skin.horizontalScrollbar.normal.background = MakeTexture(ColClear);
+        skin.horizontalScrollbar.fixedHeight = 8f;
+        skin.horizontalScrollbar.border = new RectOffset(0, 0, 0, 0);
+        skin.horizontalScrollbarThumb.normal.background = thumb;
+        skin.horizontalScrollbarThumb.hover.background = thumbHover;
+        skin.horizontalScrollbarThumb.active.background = thumbHover;
+        skin.horizontalScrollbarThumb.fixedHeight = 8f;
+        skin.horizontalScrollbarThumb.border = new RectOffset(4, 4, 4, 4);
+        skin.horizontalScrollbarLeftButton.fixedWidth = 0f;
+        skin.horizontalScrollbarLeftButton.fixedHeight = 0f;
+        skin.horizontalScrollbarRightButton.fixedWidth = 0f;
+        skin.horizontalScrollbarRightButton.fixedHeight = 0f;
 
         skin.verticalScrollbarUpButton.fixedHeight = 0f;
         skin.verticalScrollbarUpButton.fixedWidth = 0f;
