@@ -22,23 +22,27 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private static readonly string[] TabLabels =
         { "Contrôle", "Survie", "Cibles", "Collecte", "Carte Raid", "Ressources", "État", "Événements" };
 
-    private const float HeaderHeight = 44f;
-    private const float TabBarHeight = 34f;
+    private const float HeaderHeight = 46f;
+    private const float SidebarWidth = 150f;
     private const float FooterHeight = 22f;
 
     // Palette
-    private static readonly Color ColBg = new Color(0.078f, 0.086f, 0.106f, 0.97f);
-    private static readonly Color ColHeader = new Color(0.106f, 0.118f, 0.145f, 1f);
-    private static readonly Color ColCard = new Color(0.125f, 0.137f, 0.165f, 1f);
-    private static readonly Color ColField = new Color(0.176f, 0.192f, 0.227f, 1f);
-    private static readonly Color ColFieldHover = new Color(0.22f, 0.24f, 0.285f, 1f);
-    private static readonly Color ColAccent = new Color(0.24f, 0.65f, 0.96f, 1f);
-    private static readonly Color ColAccentDim = new Color(0.14f, 0.30f, 0.45f, 1f);
+    private static readonly Color ColBg = new Color(0.063f, 0.082f, 0.110f, 0.98f);
+    private static readonly Color ColHeader = new Color(0.063f, 0.082f, 0.110f, 1f);
+    private static readonly Color ColSidebar = new Color(0.047f, 0.063f, 0.086f, 1f);
+    private static readonly Color ColLine = new Color(0.114f, 0.145f, 0.192f, 1f);
+    private static readonly Color ColCard = new Color(0.078f, 0.102f, 0.137f, 1f);
+    private static readonly Color ColField = new Color(0.098f, 0.129f, 0.173f, 1f);
+    private static readonly Color ColFieldHover = new Color(0.141f, 0.176f, 0.231f, 1f);
+    private static readonly Color ColBox = new Color(0.043f, 0.055f, 0.075f, 1f);
+    private static readonly Color ColBoxEdge = new Color(0.30f, 0.35f, 0.42f, 1f);
+    private static readonly Color ColAccent = new Color(0.239f, 0.608f, 1f, 1f);
+    private static readonly Color ColAccentDim = new Color(0.090f, 0.227f, 0.388f, 1f);
     private static readonly Color ColOk = new Color(0.24f, 0.86f, 0.59f, 1f);
     private static readonly Color ColWarn = new Color(0.96f, 0.65f, 0.14f, 1f);
     private static readonly Color ColDanger = new Color(0.95f, 0.37f, 0.36f, 1f);
     private static readonly Color ColText = new Color(0.90f, 0.91f, 0.94f, 1f);
-    private static readonly Color ColMuted = new Color(0.54f, 0.58f, 0.65f, 1f);
+    private static readonly Color ColMuted = new Color(0.486f, 0.533f, 0.600f, 1f);
 
     private readonly HashSet<string> _selectedNpcs =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -54,7 +58,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private List<string> _displayNpcs = new List<string>();
     private List<string> _displayMonsters = new List<string>();
 
-    private Rect _panel = new Rect(16f, 16f, 620f, 680f);
+    private Rect _panel = new Rect(16f, 16f, 780f, 640f);
     private Vector2 _scrollPosition;
     private bool _visible = true;
     private bool _dragging;
@@ -133,7 +137,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
         EnsureStyles();
 
-        _panel.width = Mathf.Min(_panel.width, Mathf.Max(380f, Screen.width - 16f));
+        _panel.width = Mathf.Min(_panel.width, Mathf.Max(520f, Screen.width - 16f));
         _panel.height = Mathf.Min(_panel.height, Mathf.Max(320f, Screen.height - 16f));
         _panel.x = Mathf.Clamp(_panel.x, 0f, Mathf.Max(0f, Screen.width - _panel.width));
         _panel.y = Mathf.Clamp(_panel.y, 0f, Mathf.Max(0f, Screen.height - _panel.height));
@@ -145,11 +149,12 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         GUI.Box(_panel, GUIContent.none, _sWindow);
         HandleDrag();
         DrawHeader();
-        DrawTabBar();
+        DrawSidebar();
 
-        float bodyTop = _panel.y + HeaderHeight + TabBarHeight + 10f;
-        float bodyHeight = _panel.height - HeaderHeight - TabBarHeight - FooterHeight - 14f;
-        GUILayout.BeginArea(new Rect(_panel.x + 14f, bodyTop, _panel.width - 28f, bodyHeight));
+        float bodyLeft = _panel.x + SidebarWidth + 18f;
+        float bodyTop = _panel.y + HeaderHeight + 16f;
+        float bodyHeight = _panel.height - HeaderHeight - FooterHeight - 22f;
+        GUILayout.BeginArea(new Rect(bodyLeft, bodyTop, _panel.xMax - bodyLeft - 18f, bodyHeight));
         _scrollPosition = GUILayout.BeginScrollView(_scrollPosition);
         switch (_activeTab)
         {
@@ -166,8 +171,8 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         GUILayout.EndArea();
 
         GUI.Label(
-            new Rect(_panel.x + 16f, _panel.yMax - FooterHeight - 2f, _panel.width - 32f, FooterHeight),
-            "F8 afficher / masquer   |   glisser l'en-tête pour déplacer",
+            new Rect(_panel.x + SidebarWidth + 18f, _panel.yMax - FooterHeight - 2f, _panel.width - SidebarWidth - 36f, FooterHeight),
+            "F8 afficher / masquer   ·   glisser l'en-tête pour déplacer",
             _sMuted);
     }
 
@@ -197,14 +202,16 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private void DrawHeader()
     {
         GUI.Box(new Rect(_panel.x, _panel.y, _panel.width, HeaderHeight), GUIContent.none, _sHeader);
-        GUI.Label(new Rect(_panel.x + 16f, _panel.y + 10f, 220f, 24f), "CONSOLE BOT ELLYR", _sTitle);
+        FillRect(new Rect(_panel.x, _panel.y + HeaderHeight - 1f, _panel.width, 1f), ColLine);
+        FillRect(new Rect(_panel.x + 16f, _panel.y + 19f, 8f, 8f), ColAccent);
+        GUI.Label(new Rect(_panel.x + 32f, _panel.y + 11f, 220f, 24f), "ELLYR", _sTitle);
 
         bool running = CopperWire.AutomationEnabled;
-        Rect play = new Rect(_panel.xMax - 108f, _panel.y + 8f, 92f, 28f);
+        Rect play = new Rect(_panel.xMax - 108f, _panel.y + 9f, 92f, 28f);
         if (GUI.Button(play, running ? "ARRÊTER" : "LANCER", running ? _sBtnDanger : _sBtnPrimary))
             CopperWire.SetAutomationEnabled(!running);
 
-        Rect pill = new Rect(play.x - 138f, _panel.y + 10f, 128f, 24f);
+        Rect pill = new Rect(play.x - 138f, _panel.y + 11f, 128f, 24f);
         Color previous = GUI.color;
         GUI.color = StateColor();
         GUI.Box(pill, GUIContent.none, _sPill);
@@ -275,29 +282,35 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         return ColOk;
     }
 
-    private void DrawTabBar()
+    private void DrawSidebar()
     {
-        float y = _panel.y + HeaderHeight;
-        float tabWidth = _panel.width / TabLabels.Length;
+        Rect side = new Rect(_panel.x, _panel.y + HeaderHeight, SidebarWidth, _panel.height - HeaderHeight);
+        FillRect(side, ColSidebar);
+        FillRect(new Rect(side.xMax - 1f, side.y, 1f, side.height), ColLine);
+
+        const float itemHeight = 32f;
         for (int i = 0; i < TabLabels.Length; i++)
         {
-            Rect rect = new Rect(_panel.x + i * tabWidth, y, tabWidth, TabBarHeight);
+            Rect rect = new Rect(side.x + 8f, side.y + 12f + i * (itemHeight + 2f), side.width - 17f, itemHeight);
             bool selected = _activeTab == i;
+            if (selected)
+                FillRect(rect, ColAccentDim);
             if (GUI.Button(rect, TabLabels[i], selected ? _sTabOn : _sTab) && !selected)
             {
                 _activeTab = i;
                 _scrollPosition = Vector2.zero;
             }
             if (selected)
-            {
-                Color previous = GUI.color;
-                GUI.color = ColAccent;
-                GUI.DrawTexture(
-                    new Rect(rect.x + 12f, rect.yMax - 3f, rect.width - 24f, 3f),
-                    Texture2D.whiteTexture);
-                GUI.color = previous;
-            }
+                FillRect(new Rect(rect.x, rect.y + 7f, 2f, rect.height - 14f), ColAccent);
         }
+    }
+
+    private static void FillRect(Rect rect, Color color)
+    {
+        Color previous = GUI.color;
+        GUI.color = color;
+        GUI.DrawTexture(rect, Texture2D.whiteTexture);
+        GUI.color = previous;
     }
 
     // ------------------------------------------------------------------ Onglets
@@ -733,17 +746,41 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         GUILayout.EndHorizontal();
     }
 
+    // Case à cocher : carré à bord fin, rempli en accent avec une coche quand c'est actif.
     private bool Switch(bool value, string label)
     {
-        GUILayout.BeginHorizontal();
-        bool clicked = GUILayout.Button(
-            value ? "OUI" : "NON",
-            value ? _sSwitchOn : _sSwitchOff,
-            GUILayout.Width(54f),
-            GUILayout.Height(24f));
-        GUILayout.Label(label, _sLabel);
-        GUILayout.EndHorizontal();
-        return clicked ? !value : value;
+        Rect row = GUILayoutUtility.GetRect(10f, 26f, GUILayout.ExpandWidth(true));
+        Event e = Event.current;
+        bool hover = row.Contains(e.mousePosition);
+        if (e.type == EventType.MouseDown && e.button == 0 && hover)
+        {
+            value = !value;
+            e.Use();
+        }
+
+        if (e.type == EventType.Repaint)
+        {
+            Rect box = new Rect(row.x + 1f, row.y + (row.height - 16f) * 0.5f, 16f, 16f);
+            FillRect(box, value ? ColAccent : (hover ? ColMuted : ColBoxEdge));
+            FillRect(new Rect(box.x + 1f, box.y + 1f, 14f, 14f), value ? ColAccent : ColBox);
+            if (value)
+                DrawCheckMark(box);
+        }
+
+        GUI.Label(new Rect(row.x + 28f, row.y, row.width - 28f, row.height), label, _sLabel);
+        return value;
+    }
+
+    // Coche dessinée avec deux traits : un « L » tourné de 45 degrés.
+    private static void DrawCheckMark(Rect box)
+    {
+        Matrix4x4 saved = GUI.matrix;
+        Vector2 center = box.center + new Vector2(0f, -1f);
+        GUIUtility.RotateAroundPivot(-45f, center);
+        Color ink = new Color(0.02f, 0.06f, 0.12f, 1f);
+        FillRect(new Rect(center.x - 3.5f, center.y - 3f, 2f, 6f), ink);
+        FillRect(new Rect(center.x - 3.5f, center.y + 1f, 7f, 2f), ink);
+        GUI.matrix = saved;
     }
 
     private int Segmented(int index, string first, string second)
@@ -899,7 +936,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         _sCard = CloneStyle(skin.box);
         _sCard.normal.background = MakeTexture(ColCard);
         _sCard.border = new RectOffset(0, 0, 0, 0);
-        _sCard.padding = new RectOffset(14, 14, 12, 12);
+        _sCard.padding = new RectOffset(16, 16, 14, 14);
         _sCard.margin = new RectOffset(0, 0, 0, 0);
 
         _sLabel = CloneStyle(skin.label);
@@ -916,7 +953,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         _sCardTitle = CloneStyle(_sLabel);
         _sCardTitle.fontSize = 11;
         _sCardTitle.fontStyle = FontStyle.Bold;
-        _sCardTitle.normal.textColor = ColAccent;
+        _sCardTitle.normal.textColor = ColMuted;
 
         _sMuted = CloneStyle(_sLabel);
         _sMuted.fontSize = 12;
@@ -927,12 +964,14 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         _sValue.fontStyle = FontStyle.Bold;
 
         _sTab = CloneStyle(skin.button);
-        Paint(_sTab, ColHeader, ColCard, ColMuted);
+        Paint(_sTab, new Color(0f, 0f, 0f, 0f), ColField, ColMuted);
         _sTab.border = new RectOffset(0, 0, 0, 0);
         _sTab.fontSize = 13;
+        _sTab.alignment = TextAnchor.MiddleLeft;
+        _sTab.padding = new RectOffset(14, 6, 2, 2);
 
         _sTabOn = CloneStyle(_sTab);
-        Paint(_sTabOn, ColHeader, ColHeader, ColText);
+        Paint(_sTabOn, new Color(0f, 0f, 0f, 0f), new Color(0f, 0f, 0f, 0f), new Color(0.82f, 0.90f, 1f, 1f));
         _sTabOn.fontStyle = FontStyle.Bold;
 
         _sBtn = CloneStyle(skin.button);
