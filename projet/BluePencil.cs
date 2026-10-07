@@ -819,7 +819,7 @@ public sealed class BluePencil
     /*
      * Le serveur envoie certains PNJ (navires d'événement) même quand ils sont sur une autre carte.
      * Une cible n'est valable que sur la carte du joueur. Carte du PNJ inconnue (<= 0) : on ne
-     * l'écarte pas. En Raid, la liste de cibles est celle de la Raid : pas de filtre de carte.
+     * l'écarte pas, sauf pour un navire d'événement. En Raid, la liste de cibles est celle de la Raid : pas de filtre de carte.
      */
     private bool IsOnPlayerMap(PnjInfo pnj, EtatJeuSnapshot snapshot)
     {
@@ -827,6 +827,11 @@ public sealed class BluePencil
             return true;
 
         int playerMap = snapshot.Joueur.Harita;
+
+        // Navire d'événement (visible à travers les cartes) : carte inconnue = écarté.
+        if (pnj.Harita <= 0 && string.Equals(pnj.Categorie, "npc_navire_event", StringComparison.Ordinal))
+            return false;
+
         return pnj.Harita <= 0 || playerMap <= 0 || pnj.Harita == playerMap;
     }
 
