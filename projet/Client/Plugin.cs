@@ -41,7 +41,10 @@ namespace EtatJoueurMod
         private static readonly Dictionary<string, ConfigEntry<bool>> CollectibleTypeSettings =
             new Dictionary<string, ConfigEntry<bool>>(StringComparer.Ordinal);
         private static Il2CppSystem.Action _targetCatalogDisconnectHandler;
-        private const int BackgroundTargetFrameRate = 20;
+        private const int DefaultBackgroundFps = 20;
+        private const int MinimumBackgroundFps = 20;
+        private const int MaximumBackgroundFps = 60;
+        private static ConfigEntry<int> _backgroundFps;
         private static Action<bool> _focusChangedHandler;
         private static int _foregroundTargetFrameRate = -1;
         private static int _foregroundVSyncCount;
@@ -142,6 +145,25 @@ namespace EtatJoueurMod
         public static void SetRaidBossPriority(bool enabled)
         {
             SetSetting(_raidBossPriority, enabled);
+        }
+
+        // Images par seconde quand le jeu est réduit ou n'a plus le focus (20 à 60, 20 par défaut).
+        public static int BackgroundFps
+        {
+            get
+            {
+                return _backgroundFps == null
+                    ? DefaultBackgroundFps
+                    : Mathf.Clamp(_backgroundFps.Value, MinimumBackgroundFps, MaximumBackgroundFps);
+            }
+        }
+
+        public static int MinimumBackgroundFpsValue { get { return MinimumBackgroundFps; } }
+        public static int MaximumBackgroundFpsValue { get { return MaximumBackgroundFps; } }
+
+        public static void SetBackgroundFps(int fps)
+        {
+            SetSetting(_backgroundFps, Mathf.Clamp(fps, MinimumBackgroundFps, MaximumBackgroundFps));
         }
 
         // Apparence de la console : identifiant du thème et code de langue ("auto" = langue du système).
@@ -247,6 +269,10 @@ namespace EtatJoueurMod
                 "Enable the Raid map module: enter the Raid matching the player level when the medallion is available.");
             _respawnEnabled = _config.Bind("Respawn", "RespawnEnabled", true,
                 "Respawn module: when true, the bot presses the respawn button after a death; when false it does nothing on death.");
+            _backgroundFps = _config.Bind("Console", "BackgroundFps", DefaultBackgroundFps,
+                new ConfigDescription(
+                    "Frame rate used while the game is minimized or unfocused (20 to 60). The foreground frame rate is never changed.",
+                    new AcceptableValueRange<int>(MinimumBackgroundFps, MaximumBackgroundFps)));
             _themeId = _config.Bind("Console", "Theme", "logo",
                 "Console theme: logo, rouge, rgb or blanc.");
             _language = _config.Bind("Console", "Language", "auto",
@@ -323,7 +349,7 @@ namespace EtatJoueurMod
                 _foregroundTargetFrameRate = Application.targetFrameRate;
                 _foregroundVSyncCount = QualitySettings.vSyncCount;
                 QualitySettings.vSyncCount = 0;
-                Application.targetFrameRate = BackgroundTargetFrameRate;
+                Application.targetFrameRate = BackgroundFps;
                 _backgroundFrameRateApplied = true;
                 return;
             }

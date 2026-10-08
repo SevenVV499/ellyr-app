@@ -125,6 +125,10 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
     private GUIStyle _sItemHover;
     private GUIStyle _sTip;
     private GUIStyle _sTgOff;
+    private GUIStyle _sBubble;
+    private Texture2D _texInfo;
+    private int _fpsValue = 20;
+    private bool _fpsDragging;
     private GUIStyle _sTgOn;
     private GUIStyle _sRight;
     private Texture2D _texPlay;
@@ -183,6 +187,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
                 ? ConsoleText.DetectSystemLanguage()
                 : language);
         _themeId = FindTheme(Plugin.ThemeId).Id;
+        _fpsValue = Plugin.BackgroundFps;
         _allowPnj = BotTestConsoleCatalog.CreatePnjFilter(IsPnjAllowed);
         _collectEnabled = Plugin.CollectEnabled;
         RefreshCollectibleSettings();
@@ -442,25 +447,53 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
 
     // ------------------------------------------------------------------ Volet des réglages
 
-    private const float CfgWidth = 196f;
+    private const float CfgWidth = 220f;
     private const float CfgRow = 22f;
+    private const string FpsInfoText =
+        "Appliqué seulement quand le jeu est réduit ou n'a plus le focus. Au premier plan, le jeu garde ses FPS normaux. Plus haut = plus fluide, mais plus de charge pour le PC.";
+
+    // Positions (relatives au volet) : thèmes sur deux colonnes, langues sur deux colonnes, puis le curseur de FPS.
+    private static float CfgThemesTop(Rect cfg) { return cfg.y + 24f; }
+    private static float CfgLanguagesTitle(Rect cfg) { return CfgThemesTop(cfg) + (Themes.Length / 2) * CfgRow + 14f; }
+    private static float CfgLanguagesTop(Rect cfg) { return CfgLanguagesTitle(cfg) + 16f; }
+    private static float CfgFpsTitle(Rect cfg) { return CfgLanguagesTop(cfg) + (ConsoleText.Codes.Length / 2) * CfgRow + 14f; }
+
+    private static Rect CfgFpsRow(Rect cfg)
+    {
+        return new Rect(cfg.x + 10f, CfgFpsTitle(cfg) + 18f, cfg.width - 20f, CfgRow);
+    }
+
+    private static Rect CfgFpsTrack(Rect cfg)
+    {
+        Rect row = CfgFpsRow(cfg);
+        return new Rect(row.x + 6f, row.y, row.width - 6f - 62f, row.height);
+    }
 
     private Rect CfgRect()
     {
-        float height = 8f + 16f + Themes.Length * CfgRow + 14f + 16f + (ConsoleText.Codes.Length / 2) * CfgRow + 10f;
-        return new Rect(_panel.xMax - 8f - CfgWidth, _panel.y + 36f, CfgWidth, height);
+        Rect probe = new Rect(_panel.xMax - 8f - CfgWidth, _panel.y + 36f, CfgWidth, 0f);
+        float height = CfgFpsRow(probe).yMax + 8f - probe.y;
+        return new Rect(probe.x, probe.y, CfgWidth, height);
     }
 
     private static Rect CfgThemeRow(Rect cfg, int index)
     {
-        return new Rect(cfg.x + 8f, cfg.y + 8f + 16f + index * CfgRow, cfg.width - 16f, CfgRow);
+        float width = (cfg.width - 16f) * 0.5f;
+        return new Rect(cfg.x + 8f + (index % 2) * width, CfgThemesTop(cfg) + (index / 2) * CfgRow, width, CfgRow);
     }
 
     private static Rect CfgLanguageRow(Rect cfg, int index)
     {
-        float top = cfg.y + 8f + 16f + Themes.Length * CfgRow + 14f + 16f;
         float width = (cfg.width - 16f) * 0.5f;
-        return new Rect(cfg.x + 8f + (index % 2) * width, top + (index / 2) * CfgRow, width, CfgRow);
+        return new Rect(cfg.x + 8f + (index % 2) * width, CfgLanguagesTop(cfg) + (index / 2) * CfgRow, width, CfgRow);
+    }
+
+    private void SetFpsFromMouse(Rect track, float mouseX)
+    {
+        float t = Mathf.Clamp01((mouseX - track.x - 6f) / Mathf.Max(1f, track.width - 12f));
+        int min = Plugin.MinimumBackgroundFpsValue;
+        int max = Plugin.MaximumBackgroundFpsValue;
+        _fpsValue = Mathf.Clamp(Mathf.RoundToInt(min + t * (max - min)), min, max);
     }
 
     // Traité avant le reste de l'interface : un clic sur le volet ne traverse pas jusqu'aux contrôles dessous.
@@ -471,6 +504,23 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
             return;
 
         Event e = Event.current;
+        if (_fpsDragging)
+        {
+            Rect track = CfgFpsTrack(CfgRect());
+            if (e.type == EventType.MouseDrag)
+            {
+                SetFpsFromMouse(track, e.mousePosition.x);
+                e.Use();
+            }
+            else if (e.type == EventType.MouseUp)
+            {
+                _fpsDragging = false;
+                Plugin.SetBackgroundFps(_fpsValue);
+                e.Use();
+            }
+            return;
+        }
+
         if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Escape)
         {
             _cfgOpen = false;
@@ -499,6 +549,13 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
                     ConsoleText.SetLanguage(ConsoleText.Codes[i]);
                     Plugin.SetLanguage(ConsoleText.Codes[i]);
                 }
+            }
+
+            Rect fpsTrack = CfgFpsTrack(cfg);
+            if (fpsTrack.Contains(e.mousePosition))
+            {
+                _fpsDragging = true;
+                SetFpsFromMouse(fpsTrack, e.mousePosition.x);
             }
             e.Use();
         }
@@ -532,11 +589,11 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
                 GUI.Box(row, GUIContent.none, _sRowOn);
             else if (row.Contains(mouse))
                 GUI.Box(row, GUIContent.none, _sItemHover);
-            DrawSwatch(new Rect(row.x + 8f, row.y + 7f, 20f, 8f), Themes[i]);
-            GUI.Label(new Rect(row.x + 36f, row.y, row.width - 40f, row.height), T(Themes[i].NameKey), _sLabelClip);
+            DrawSwatch(new Rect(row.x + 6f, row.y + 7f, 14f, 8f), Themes[i]);
+            GUI.Label(new Rect(row.x + 26f, row.y, row.width - 28f, row.height), T(Themes[i].NameKey), _sLabelClip);
         }
 
-        float titleY = cfg.y + 8f + 16f + Themes.Length * CfgRow + 14f;
+        float titleY = CfgLanguagesTitle(cfg);
         FillRect(new Rect(cfg.x + 10f, titleY - 8f, cfg.width - 20f, 1f), ColLine);
         GUI.Label(new Rect(cfg.x + 10f, titleY - 2f, cfg.width - 20f, 16f), T("Langue").ToUpperInvariant(), _sCardTitle);
         for (int i = 0; i < ConsoleText.Codes.Length; i++)
@@ -549,6 +606,58 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
                 GUI.Box(row, GUIContent.none, _sItemHover);
             GUI.Label(new Rect(row.x + 8f, row.y, row.width - 10f, row.height), ConsoleText.Names[i], _sLabelClip);
         }
+
+        // FPS en arrière-plan : titre, bulle d'info, curseur de 20 à 60.
+        float fpsTitleY = CfgFpsTitle(cfg);
+        FillRect(new Rect(cfg.x + 10f, fpsTitleY - 8f, cfg.width - 20f, 1f), ColLine);
+        string fpsTitle = T("FPS en arrière-plan").ToUpperInvariant();
+        GUI.Label(new Rect(cfg.x + 10f, fpsTitleY - 2f, cfg.width - 40f, 16f), fpsTitle, _sCardTitle);
+        float titleWidth = _sCardTitle.CalcSize(new GUIContent(fpsTitle)).x;
+        Rect info = new Rect(cfg.x + 10f + titleWidth + 6f, fpsTitleY - 1f, 13f, 13f);
+        GUI.DrawTexture(info, _texInfo);
+        GUI.Label(new Rect(info.x, info.y - 1f, info.width, info.height), "i", _sInfoGlyph());
+
+        Rect row2 = CfgFpsRow(cfg);
+        Rect track = CfgFpsTrack(cfg);
+        Rect bar = new Rect(track.x + 6f, track.center.y - 2f, track.width - 12f, 4f);
+        GUI.Box(bar, GUIContent.none, _sTrack);
+        float fraction = Mathf.Clamp01(
+            (_fpsValue - Plugin.MinimumBackgroundFpsValue)
+            / (float)(Plugin.MaximumBackgroundFpsValue - Plugin.MinimumBackgroundFpsValue));
+        if (fraction > 0f)
+        {
+            Color previous = GUI.color;
+            GUI.color = ColAccent;
+            GUI.Box(new Rect(bar.x, bar.y, Mathf.Max(4f, bar.width * fraction), 4f), GUIContent.none, _sTrackFill);
+            GUI.color = previous;
+        }
+        DrawDot(new Rect(bar.x + bar.width * fraction - 6f, track.center.y - 6f, 12f, 12f), ColText);
+        GUI.Label(new Rect(row2.xMax - 56f, row2.y, 56f, row2.height), _fpsValue + " FPS", _sValue);
+
+        if (info.Contains(mouse) || _fpsDragging)
+        {
+            float width = cfg.width - 20f;
+            string text = T(FpsInfoText);
+            float height = _sBubble.CalcHeight(new GUIContent(text), width - 16f) + 14f;
+            Rect bubble = new Rect(cfg.x + 10f, info.y - height - 6f, width, height);
+            if (info.Contains(mouse))
+                GUI.Box(bubble, text, _sBubble);
+        }
+    }
+
+    private GUIStyle _infoGlyph;
+    private GUIStyle _sInfoGlyph()
+    {
+        if (_infoGlyph == null)
+        {
+            _infoGlyph = CloneStyle(_sLabel);
+            _infoGlyph.alignment = TextAnchor.MiddleCenter;
+            _infoGlyph.fontSize = 9;
+            _infoGlyph.fontStyle = FontStyle.Bold;
+            _infoGlyph.wordWrap = false;
+            _infoGlyph.normal.textColor = ColMuted;
+        }
+        return _infoGlyph;
     }
 
     // Pastille de couleur du thème : dégradé en dix tranches (arc-en-ciel pour le thème animé).
@@ -1858,6 +1967,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         _texPlay = PlayTexture(10);
         _texStop = RoundTexture(10, 2, Color.white, Color.white, 0f);
         _texLogo = BuildLogo();
+        _texInfo = RoundTexture(13, 6, ColClear, ColBoxEdge, 1f);
         _icons.Clear();
         for (int i = 0; i < 9; i++)
             _icons.Add(BuildIcon(i));
@@ -1974,6 +2084,13 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         _sRight.wordWrap = false;
         _sRight.clipping = TextClipping.Clip;
 
+        _sBubble = CloneStyle(_sPopup);
+        RoundPaint(_sBubble, new Color(0.10f, 0.13f, 0.17f, 1f), new Color(0.10f, 0.13f, 0.17f, 1f), ColText, ColBoxEdge, ColBoxEdge, 6);
+        _sBubble.alignment = TextAnchor.UpperLeft;
+        _sBubble.wordWrap = true;
+        _sBubble.fontSize = 10;
+        _sBubble.padding = new RectOffset(8, 8, 6, 6);
+
         _sTip = CloneStyle(_sPopup);
         _sTip.alignment = TextAnchor.MiddleCenter;
         _sTip.fontSize = 10;
@@ -2007,6 +2124,7 @@ public sealed class BotTestConsoleBehaviour : MonoBehaviour
         RoundPaint(_sTrackFill, Color.white, Color.white, ColText, Color.white, Color.white, 2);
 
         _pillText = null;
+        _infoGlyph = null;
         _stylesReady = true;
     }
 
