@@ -1,3 +1,4 @@
+#if MS_LOGGING
 using System;
 using Microsoft.Extensions.Logging;
 
@@ -44,3 +45,4 @@ namespace EllyrLoader
         }
     }
 }
+#endif

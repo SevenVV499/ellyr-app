@@ -24,6 +24,16 @@
     <Reference Include="$(LibDir)\Il2CppInterop.Common.dll" Private="false" />
     <Reference Include="$(LibDir)\Il2CppInterop.HarmonySupport.dll" Private="false" />
     <Reference Include="$(LibDir)\0Harmony.dll" Private="false" />
+  </ItemGroup>
+
+  <!--
+    Le journal d'Il2CppInterop est facultatif. Il n'est compilé que si Microsoft.Extensions.Logging.Abstractions.dll
+    est trouvé : sinon la compilation continue sans lui (symbole MS_LOGGING absent).
+  -->
+  <PropertyGroup Condition="Exists('$(LibDir)\Microsoft.Extensions.Logging.Abstractions.dll')">
+    <DefineConstants>$(DefineConstants);MS_LOGGING</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="Exists('$(LibDir)\Microsoft.Extensions.Logging.Abstractions.dll')">
     <Reference Include="$(LibDir)\Microsoft.Extensions.Logging.Abstractions.dll" Private="false" />
   </ItemGroup>
 

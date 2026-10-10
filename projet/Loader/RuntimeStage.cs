@@ -42,14 +42,18 @@ namespace EllyrLoader
             Version unity = UnityVersionReader.Read(paths, config);
             LoaderLog.Info("Version d'Unity : " + unity);
 
-            Il2CppInteropRuntime.Create(new RuntimeConfiguration
-                {
-                    UnityVersion = unity,
-                    DetourProvider = new DobbyDetourProvider()
-                })
-                .AddLogger(new MsLoggerAdapter("Il2CppInterop"))
-                .AddHarmonySupport()
-                .Start();
+            Il2CppInteropRuntime runtime = Il2CppInteropRuntime.Create(new RuntimeConfiguration
+            {
+                UnityVersion = unity,
+                DetourProvider = new DobbyDetourProvider()
+            });
+#if MS_LOGGING
+            runtime.AddLogger(new MsLoggerAdapter("Il2CppInterop"));
+#else
+            LoaderLog.Warning("Journal d'Il2CppInterop désactivé : Microsoft.Extensions.Logging.Abstractions.dll n'a pas été trouvé à la compilation.");
+#endif
+            runtime.AddHarmonySupport();
+            runtime.Start();
             LoaderLog.Info("Il2CppInterop est prêt");
 
             RuntimeInvokeHook.Install(paths, config);
