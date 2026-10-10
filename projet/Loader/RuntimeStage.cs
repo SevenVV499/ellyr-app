@@ -16,6 +16,18 @@ namespace EllyrLoader
      */
     internal static class RuntimeStage
     {
+        // Cecil (utilisé par HarmonyX/MonoMod) résout les assemblies via TRUSTED_PLATFORM_ASSEMBLIES, comme le fait BepInEx.
+        private static void RegisterCecilPlatformAssemblies()
+        {
+            const string key = "TRUSTED_PLATFORM_ASSEMBLIES";
+            string runtimeDir = Path.GetDirectoryName(typeof(object).Assembly.Location);
+            if (string.IsNullOrEmpty(runtimeDir) || !Directory.Exists(runtimeDir))
+                return;
+            string current = AppDomain.CurrentDomain.GetData(key) as string;
+            string added = string.Join(Path.PathSeparator.ToString(), Directory.GetFiles(runtimeDir, "*.dll", SearchOption.TopDirectoryOnly));
+            AppDomain.CurrentDomain.SetData(key, string.IsNullOrEmpty(current) ? added : current + Path.PathSeparator + added);
+        }
+
         [MethodImpl(MethodImplOptions.NoInlining)]
         public static void Run(LoaderPaths paths, LoaderConfig config)
         {
@@ -26,6 +38,7 @@ namespace EllyrLoader
             if (!Directory.Exists(paths.Interop))
                 throw new DirectoryNotFoundException("Dossier interop introuvable : " + paths.Interop);
 
+            RegisterCecilPlatformAssemblies();
             DobbyLib.InstallResolver(paths.Lib);
             Environment.SetEnvironmentVariable("IL2CPP_INTEROP_DATABASES_LOCATION", paths.Interop);
 
