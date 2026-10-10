@@ -1,8 +1,4 @@
 using System;
-using BepInEx;
-using BepInEx.Configuration;
-using BepInEx.Logging;
-using BepInEx.Unity.IL2CPP;
 using Il2CppInterop.Runtime;
 using HarmonyLib;
 using Mirror;
@@ -11,52 +7,52 @@ using System.Collections.Generic;
 
 namespace EtatJoueurMod
 {
-    [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
-    public class Plugin : BasePlugin
+    // Cœur du bot côté client : réglages, démarrage, hooks. Aucune dépendance à BepInEx : l'hôte qui charge le bot
+    // (voir Client/Host) appelle Start et fournit le journal, les réglages et la création du composant Unity.
+    public static class Plugin
     {
-        // GUID arbitraire mais unique — à changer si tu as un autre mod avec
-        // le même GUID, sinon BepInEx pourrait les confondre.
+        // GUID arbitraire mais unique, utilisé aussi comme nom du fichier de config par l'hôte BepInEx.
         public const string PluginGuid = "com.etatjoueur.mod";
         public const string PluginName = "EtatJoueurPlugin";
         public const string PluginVersion = "3.0.0";
 
-        public static ManualLogSource Logger;
+        public static readonly HostLog Logger = new HostLog();
 
-        private BotTestConsoleBehaviour _botTestConsole;
+        private static BotTestConsoleBehaviour _botTestConsole;
 
-        private static ConfigFile _config;
-        private static ConfigEntry<bool> _collectEnabled;
-        private static ConfigEntry<bool> _repairEnabled;
-        private static ConfigEntry<int> _repairPercent;
-        private static ConfigEntry<bool> _fleeEnabled;
-        private static ConfigEntry<int> _fleePercent;
-        private static ConfigEntry<bool> _fleeCollectEnabled;
-        private static ConfigEntry<bool> _repairPausesActivity;
-        private static ConfigEntry<bool> _raidEnabled;
-        private static ConfigEntry<bool> _raidBossPriority;
-        private static ConfigEntry<bool> _respawnEnabled;
-        private static ConfigEntry<string> _themeId;
-        private static ConfigEntry<string> _language;
-        private static ConfigEntry<bool> _onlyFullHealthTargets;
-        private static readonly Dictionary<string, ConfigEntry<bool>> CollectibleTypeSettings =
-            new Dictionary<string, ConfigEntry<bool>>(StringComparer.Ordinal);
+        private static ISettingsStore _config;
+        private static ISetting<bool> _collectEnabled;
+        private static ISetting<bool> _repairEnabled;
+        private static ISetting<int> _repairPercent;
+        private static ISetting<bool> _fleeEnabled;
+        private static ISetting<int> _fleePercent;
+        private static ISetting<bool> _fleeCollectEnabled;
+        private static ISetting<bool> _repairPausesActivity;
+        private static ISetting<bool> _raidEnabled;
+        private static ISetting<bool> _raidBossPriority;
+        private static ISetting<bool> _respawnEnabled;
+        private static ISetting<string> _themeId;
+        private static ISetting<string> _language;
+        private static ISetting<bool> _onlyFullHealthTargets;
+        private static readonly Dictionary<string, ISetting<bool>> CollectibleTypeSettings =
+            new Dictionary<string, ISetting<bool>>(StringComparer.Ordinal);
         private static Il2CppSystem.Action _targetCatalogDisconnectHandler;
         private const int DefaultBackgroundFps = 20;
         private const int MinimumBackgroundFps = 20;
         private const int MaximumBackgroundFps = 60;
-        private static ConfigEntry<int> _backgroundFps;
+        private static ISetting<int> _backgroundFps;
         private static Action<bool> _focusChangedHandler;
         private static int _foregroundTargetFrameRate = -1;
         private static int _foregroundVSyncCount;
         private static bool _backgroundFrameRateApplied;
 
-        public override void Load()
+        public static void Start(IHost host)
         {
-            Logger = BepInEx.Logging.Logger.CreateLogSource(PluginName);
+            Logger.Attach(host.Log);
 
             try
             {
-            _config = Config;
+            _config = host.Settings;
             Application.runInBackground = true;
                 _foregroundTargetFrameRate = Application.targetFrameRate;
                 _foregroundVSyncCount = QualitySettings.vSyncCount;
@@ -82,7 +78,7 @@ namespace EtatJoueurMod
                 var harmony = new Harmony(PluginGuid);
                 Hooks.Appliquer(harmony);
 
-                _botTestConsole = AddComponent<BotTestConsoleBehaviour>();
+                _botTestConsole = host.AddComponent<BotTestConsoleBehaviour>();
             }
             catch (Exception e)
             {
@@ -242,7 +238,7 @@ namespace EtatJoueurMod
             SetSetting(_fleePercent, Mathf.Clamp(percent, 0, 100));
         }
 
-        private static void SetSetting<T>(ConfigEntry<T> setting, T value)
+        private static void SetSetting<T>(ISetting<T> setting, T value)
         {
             if (setting == null || EqualityComparer<T>.Default.Equals(setting.Value, value))
                 return;
@@ -252,11 +248,10 @@ namespace EtatJoueurMod
 
         internal static void InitializeSurvivalConfiguration()
         {
-            var percentRange = new AcceptableValueRange<int>(0, 100);
             _repairEnabled = _config.Bind("Survival", "RepairEnabled", false,
                 "Trigger Repair() while HP <= RepairPercent (runs alongside the current activity).");
-            _repairPercent = _config.Bind("Survival", "RepairPercent", 30,
-                new ConfigDescription("Repair trigger threshold, in percent of max HP.", percentRange));
+            _repairPercent = _config.BindRange("Survival", "RepairPercent", 30,
+                "Repair trigger threshold, in percent of max HP.", 0, 100);
             _fleeEnabled = _config.Bind("Survival", "FleeEnabled", false,
                 "While HP <= FleePercent, abandon Combat (and Collect unless FleeCollectEnabled) and navigate until HP recovers.");
             _fleeCollectEnabled = _config.Bind("Survival", "FleeCollectEnabled", false,
@@ -269,23 +264,22 @@ namespace EtatJoueurMod
                 "Enable the Raid map module: enter the Raid matching the player level when the medallion is available.");
             _respawnEnabled = _config.Bind("Respawn", "RespawnEnabled", true,
                 "Respawn module: when true, the bot presses the respawn button after a death; when false it does nothing on death.");
-            _backgroundFps = _config.Bind("Console", "BackgroundFps", DefaultBackgroundFps,
-                new ConfigDescription(
-                    "Frame rate used while the game is minimized or unfocused (20 to 60). The foreground frame rate is never changed.",
-                    new AcceptableValueRange<int>(MinimumBackgroundFps, MaximumBackgroundFps)));
+            _backgroundFps = _config.BindRange("Console", "BackgroundFps", DefaultBackgroundFps,
+                "Frame rate used while the game is minimized or unfocused (20 to 60). The foreground frame rate is never changed.",
+                MinimumBackgroundFps, MaximumBackgroundFps);
             _themeId = _config.Bind("Console", "Theme", "logo",
                 "Console theme: logo, rouge, rgb or blanc.");
             _language = _config.Bind("Console", "Language", "auto",
                 "Console language: auto (system language), en, tr, fr, de, es, pl, ru or it.");
             _raidBossPriority = _config.Bind("Raid", "RaidBossPriority", true,
                 "Raid maps: true = attack the boss first when it is visible; false = ignore the boss, only the mobs.");
-            _fleePercent = _config.Bind("Survival", "FleePercent", 60,
-                new ConfigDescription("Flee trigger threshold, in percent of max HP.", percentRange));
+            _fleePercent = _config.BindRange("Survival", "FleePercent", 60,
+                "Flee trigger threshold, in percent of max HP.", 0, 100);
         }
 
         public static bool IsCollectibleTypeEnabled(string typeName)
         {
-            ConfigEntry<bool> setting;
+            ISetting<bool> setting;
             return !string.IsNullOrEmpty(typeName)
                 && CollectibleTypeSettings.TryGetValue(typeName, out setting)
                 && setting.Value;
@@ -301,7 +295,7 @@ namespace EtatJoueurMod
 
         public static void SetCollectibleTypeEnabled(string typeName, bool enabled)
         {
-            ConfigEntry<bool> setting;
+            ISetting<bool> setting;
             if (string.IsNullOrEmpty(typeName)
                 || !CollectibleTypeSettings.TryGetValue(typeName, out setting)
                 || setting.Value == enabled)
@@ -363,7 +357,7 @@ namespace EtatJoueurMod
         }
     }
 
-    // Réglages du cerveau : lus dans la configuration BepInEx du plugin (côté client).
+    // Réglages du cerveau : lus dans les réglages du bot (côté client).
     internal sealed class PluginBrainSettings : IBrainSettings
     {
         public bool RepairEnabled { get { return Plugin.RepairEnabled; } }
