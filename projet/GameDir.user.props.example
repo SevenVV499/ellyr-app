@@ -1,0 +1,10 @@
+<Project>
+  <!--
+    Copie ce fichier sous le nom GameDir.user.props (dans le même dossier) et mets le chemin de TON jeu :
+    le dossier qui contient GameAssembly.dll, le dossier BepInEx et le dossier dotnet.
+    Ce fichier n'est pas suivi par git : chacun a le sien.
+  -->
+  <PropertyGroup>
+    <GameDir>C:\Users\TOI\AppData\Local\...\TonJeu</GameDir>
+  </PropertyGroup>
+</Project>

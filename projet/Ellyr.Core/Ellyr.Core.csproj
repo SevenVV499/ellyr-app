@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\Ellyr.Common.props" />
+  <!--
+    Le bot (cerveau, client, contrats) sans aucun chargeur : aucune dépendance à BepInEx.
+    Tous les fichiers .cs de Brain, Client et Contracts sont inclus automatiquement,
+    sauf l'hôte BepInEx (Client/Host/BepInExHost.cs), qui n'est utilisé que par l'ancienne version.
+  -->
+  <PropertyGroup>
+    <AssemblyName>Ellyr.Core</AssemblyName>
+    <RootNamespace>EtatJoueurMod</RootNamespace>
+    <OutputType>Library</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Brain\**\*.cs" />
+    <Compile Include="..\Contracts\**\*.cs" />
+    <Compile Include="..\Client\**\*.cs" Exclude="..\Client\Host\BepInExHost.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Types du jeu générés par Il2CppInterop (dossier BepInEx\interop de ton jeu) : compilation seulement. -->
+    <Reference Include="$(InteropDir)\*.dll" Private="false" />
+    <Reference Include="$(LibDir)\Il2CppInterop.Runtime.dll" Private="false" />
+    <Reference Include="$(LibDir)\Il2CppInterop.Common.dll" Private="false" />
+    <Reference Include="$(LibDir)\0Harmony.dll" Private="false" />
+  </ItemGroup>
+</Project>

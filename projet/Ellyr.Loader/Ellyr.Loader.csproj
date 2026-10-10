@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\Ellyr.Common.props" />
+  <!--
+    Le chargeur : appelé par Doorstop au démarrage du jeu, il remplace BepInEx.
+    Après chaque compilation, les fichiers sont copiés dans le dossier Ellyr de ton jeu (voir la cible DeployToGame).
+  -->
+  <PropertyGroup>
+    <AssemblyName>Ellyr.Loader</AssemblyName>
+    <RootNamespace>EllyrLoader</RootNamespace>
+    <OutputType>Library</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Loader\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ellyr.Core\Ellyr.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="$(InteropDir)\*.dll" Private="false" />
+    <Reference Include="$(LibDir)\Il2CppInterop.Runtime.dll" Private="false" />
+    <Reference Include="$(LibDir)\Il2CppInterop.Common.dll" Private="false" />
+    <Reference Include="$(LibDir)\Il2CppInterop.HarmonySupport.dll" Private="false" />
+    <Reference Include="$(LibDir)\0Harmony.dll" Private="false" />
+    <Reference Include="$(LibDir)\Microsoft.Extensions.Logging.Abstractions.dll" Private="false" />
+  </ItemGroup>
+
+  <!-- Copie le chargeur, le bot et les bibliothèques nécessaires dans <jeu>\Ellyr. -->
+  <Target Name="DeployToGame" AfterTargets="Build" Condition="Exists('$(GameDir)\GameAssembly.dll')">
+    <PropertyGroup>
+      <EllyrDir>$(GameDir)\Ellyr</EllyrDir>
+      <CoreFolder>$(LibDir)</CoreFolder>
+    </PropertyGroup>
+    <ItemGroup>
+      <OwnFiles Include="$(OutDir)Ellyr.Loader.dll;$(OutDir)Ellyr.Core.dll" />
+      <LibFiles Include="$(CoreFolder)\*.dll"
+                Exclude="$(CoreFolder)\BepInEx*.dll;$(CoreFolder)\Cpp2IL*.dll;$(CoreFolder)\LibCpp2IL*.dll;$(CoreFolder)\AsmResolver*.dll;$(CoreFolder)\Il2CppInterop.Generator*.dll;$(CoreFolder)\StableNameDotNet*.dll;$(CoreFolder)\WasmDisassembler*.dll;$(CoreFolder)\Gee.External*.dll;$(CoreFolder)\Disarm*.dll" />
+      <InteropFiles Include="$(InteropDir)\*.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(OwnFiles)" DestinationFolder="$(EllyrDir)" />
+    <Copy SourceFiles="@(LibFiles)" DestinationFolder="$(EllyrDir)\lib" SkipUnchangedFiles="true" Condition="'$(CoreFolder)' != '$(EllyrDir)\lib'" />
+    <Copy SourceFiles="@(InteropFiles)" DestinationFolder="$(EllyrDir)\interop" SkipUnchangedFiles="true" Condition="'$(InteropDir)' != '$(EllyrDir)\interop'" />
+    <WriteLinesToFile File="$(EllyrDir)\loader.ini" Lines="stage=1" Condition="!Exists('$(EllyrDir)\loader.ini')" />
+    <Message Importance="high" Text="Ellyr déployé dans $(EllyrDir)" />
+    <Warning Condition="!Exists('$(EllyrDir)\lib\dobby.dll')"
+             Text="dobby.dll est introuvable dans $(EllyrDir)\lib : cherche ce fichier dans ton dossier BepInEx et copie-le dans ce dossier." />
+  </Target>
+
+  <Target Name="WarnGameDirMissing" AfterTargets="Build" Condition="!Exists('$(GameDir)\GameAssembly.dll')">
+    <Warning Text="GameDir n'est pas défini correctement ($(GameDir)) : copie GameDir.user.props.example en GameDir.user.props et indique le dossier du jeu." />
+  </Target>
+</Project>

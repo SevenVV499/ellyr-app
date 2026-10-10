@@ -1,0 +1,35 @@
+<Project>
+  <!-- Réglages communs aux projets Ellyr (importé explicitement par chaque .csproj, sans effet sur le reste). -->
+  <Import Project="$(MSBuildThisFileDirectory)GameDir.user.props" Condition="Exists('$(MSBuildThisFileDirectory)GameDir.user.props')" />
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CS0649;CS0169;CS0414;CS8981;CS1591</NoWarn>
+    <DebugType>embedded</DebugType>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Dossier du jeu (celui qui contient GameAssembly.dll et le dossier BepInEx). Défini dans GameDir.user.props. -->
+    <GameDir Condition="'$(GameDir)' == ''">C:\CHEMIN\VERS\LE\JEU</GameDir>
+  </PropertyGroup>
+
+  <!--
+    Où trouver les types du jeu (interop) et les bibliothèques (Il2CppInterop, Harmony…) pour compiler :
+    d'abord dans le dossier Ellyr du jeu (une fois déployé), sinon dans le dossier BepInEx.
+    Cela permet de supprimer BepInEx tout en continuant à compiler.
+  -->
+  <PropertyGroup>
+    <InteropDir Condition="Exists('$(GameDir)\Ellyr\interop\Assembly-CSharp.dll')">$(GameDir)\Ellyr\interop</InteropDir>
+    <InteropDir Condition="'$(InteropDir)' == ''">$(GameDir)\BepInEx\interop</InteropDir>
+    <LibDir Condition="Exists('$(GameDir)\Ellyr\lib\Il2CppInterop.Runtime.dll')">$(GameDir)\Ellyr\lib</LibDir>
+    <LibDir Condition="'$(LibDir)' == ''">$(GameDir)\BepInEx\core</LibDir>
+  </PropertyGroup>
+</Project>
