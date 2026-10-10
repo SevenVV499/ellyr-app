@@ -32,4 +32,12 @@
     <LibDir Condition="Exists('$(GameDir)\Ellyr\lib\Il2CppInterop.Runtime.dll')">$(GameDir)\Ellyr\lib</LibDir>
     <LibDir Condition="'$(LibDir)' == ''">$(GameDir)\BepInEx\core</LibDir>
   </PropertyGroup>
+
+  <!-- Diagnostic : dit clairement où le projet cherche, au lieu de dizaines d'erreurs de types introuvables. -->
+  <Target Name="EllyrCheckPaths" BeforeTargets="ResolveAssemblyReferences;CoreCompile">
+    <Error Condition="!Exists('$(InteropDir)\Assembly-CSharp.dll')"
+           Text="Ellyr : Assembly-CSharp.dll introuvable. GameDir=[$(GameDir)] InteropDir=[$(InteropDir)]. Vérifie GameDir.user.props et que ce dossier contient les DLL du jeu." />
+    <Error Condition="!Exists('$(LibDir)\Il2CppInterop.Runtime.dll')"
+           Text="Ellyr : Il2CppInterop.Runtime.dll introuvable. GameDir=[$(GameDir)] LibDir=[$(LibDir)]. Vérifie GameDir.user.props et que ce dossier contient les bibliothèques." />
+  </Target>
 </Project>
